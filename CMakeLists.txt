@@ -17,7 +17,7 @@ add_library(
 	${PROJECT_NAME}
 	MODULE
 	src/ae-zoom.cpp
-)
+ "include/ae.h")
 
 target_include_directories(
 	${PROJECT_NAME}

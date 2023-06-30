@@ -1,22 +1,27 @@
 ﻿#include <mutex>
 #include <thread>
 #include <string>
+#include <vector>
 
 #include "ae-zoom.h"
+#include "ae.h"
 #include "uiohook.h"
 
 // Macros for reading a file to a string at compile time
 #define STRINGIFY(...) #__VA_ARGS__
 #define STR(...) STRINGIFY(__VA_ARGS__)
 
-static AEGP_Command			S_zoom_cmd = 0L;
-static AEGP_PluginID		S_zoom_id = 0L;
-static A_long				S_idle_count = 0L;
-static SPBasicSuite*		sP = NULL;
-static long					S_zoom_delta = 0;
-static std::mutex			S_mouse_wheel_mutex;
-static std::thread			S_mouse_events_thread;
-static HWND					S_main_hwnd;
+static AEGP_Command					S_zoom_cmd = 0L;
+static AEGP_PluginID				S_zoom_id = 0L;
+static SPBasicSuite*				sP = NULL;
+static float						S_zoom_delta = 0.0f;
+static bool							S_ctrl = false;
+static std::thread					S_mouse_events_thread;
+static HWND							S_main_hwnd;
+static std::vector<LogMessage>		log_messages;
+
+// mutexes
+static std::mutex					S_mouse_wheel_mutex;
 
 static std::string zoom_script = {
 	#include "zoom-script.js"
@@ -43,48 +48,213 @@ bool isCursorInsideMainWnd()
 	}
 }
 
-LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-	if (nCode == HC_ACTION)
-	{
-		const bool is_ctrl_down = GetAsyncKeyState(VK_CONTROL) & 0x8000;
+//LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
+//{
+//	if (nCode == HC_ACTION)
+//	{
+//		const bool is_ctrl_down = GetAsyncKeyState(VK_CONTROL) & 0x8000;
+//
+//		if (
+//			is_ctrl_down &&
+//			wParam == WM_MOUSEWHEEL && 
+//			S_main_hwnd == GetForegroundWindow() &&
+//			isCursorInsideMainWnd()
+//		) {
+//			const MSLLHOOKSTRUCT* pMouseStruct = std::bit_cast<MSLLHOOKSTRUCT*>(lParam);
+//			const short wheelDelta = GET_WHEEL_DELTA_WPARAM(pMouseStruct->mouseData);
+//
+//			if (wheelDelta)
+//			{
+//				const std::lock_guard lock(S_mouse_wheel_mutex);
+//				S_zoom_delta += wheelDelta / WHEEL_DELTA;
+//			}
+//
+//			// returning 1 stops this message from dispatching it to the main AE thread
+//			return 1;
+//		}
+//	}
+//
+//
+//	return CallNextHookEx(NULL, nCode, wParam, lParam);
+//}
 
+//void CatchMouse()
+//{
+//	HINSTANCE hInstance = GetModuleHandle(NULL);
+//	const HHOOK hMouseWheelHook = SetWindowsHookEx(WH_MOUSE_LL, LLMouseProc, hInstance, NULL);
+//	MSG message;
+//
+//	while (GetMessage(&message, NULL, NULL, NULL)) {
+//		TranslateMessage(&message);
+//		DispatchMessage(&message);
+//	}
+//
+//	UnhookWindowsHookEx(hMouseWheelHook);
+//}
+
+static void logger_proc(unsigned int level, void *user_data, const char *format, va_list args) {
+    switch (level) {
+        case LOG_LEVEL_INFO:
+            break;
+
+        case LOG_LEVEL_WARN:
+        case LOG_LEVEL_ERROR:
+            //vfprintf(stderr, format, args);
+			std::lock_guard lock(S_mouse_wheel_mutex);
+			log_messages.push_back({ level, format });
+            break;
+    }
+}
+
+static void logger(unsigned int level, const char *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    logger_proc(level, NULL, format, args);
+    va_end(args);
+}
+
+void dispatch_proc(uiohook_event * const event, void *user_data) {
+    switch (event->type) {
+	case EVENT_KEY_PRESSED:
 		if (
-			is_ctrl_down &&
-			wParam == WM_MOUSEWHEEL && 
+			#ifdef AE_OS_WIN
+				event->data.keyboard.keycode == VC_CONTROL_L || 
+				event->data.keyboard.keycode == VC_CONTROL_R
+			#else
+				event->data.keyboard.keycode == VC_META_L || 
+				event->data.keyboard.keycode == VC_META_R
+			#endif
+		) 
+		{
+			S_ctrl = true;
+		}
+		break;
+	case EVENT_KEY_RELEASED:
+		if (
+			#ifdef AE_OS_WIN
+				event->data.keyboard.keycode == VC_CONTROL_L || 
+				event->data.keyboard.keycode == VC_CONTROL_R
+			#else
+				event->data.keyboard.keycode == VC_META_L || 
+				event->data.keyboard.keycode == VC_META_R
+			#endif
+		) 
+		{
+			S_ctrl = false;
+		}
+		break;
+	case EVENT_MOUSE_WHEEL:
+		if (
 			S_main_hwnd == GetForegroundWindow() &&
 			isCursorInsideMainWnd()
 		) {
-			const MSLLHOOKSTRUCT* pMouseStruct = std::bit_cast<MSLLHOOKSTRUCT*>(lParam);
-			const short wheelDelta = GET_WHEEL_DELTA_WPARAM(pMouseStruct->mouseData);
-
-			if (wheelDelta)
+			if (S_ctrl && event->data.wheel.delta)
 			{
 				const std::lock_guard lock(S_mouse_wheel_mutex);
-				S_zoom_delta += wheelDelta / WHEEL_DELTA;
+				S_zoom_delta += 
+					event->data.wheel.rotation / static_cast<float>(event->data.wheel.delta);
+
+				event->reserved = 0x1;
 			}
-
-			// returning 1 stops this message from dispatching it to the main AE thread
-			return 1;
 		}
-	}
 
+		break;
 
-	return CallNextHookEx(NULL, nCode, wParam, lParam);
+	default:
+		break;
+    }
 }
 
-void CatchMouse()
-{
-	HINSTANCE hInstance = GetModuleHandle(NULL);
-	const HHOOK hMouseWheelHook = SetWindowsHookEx(WH_MOUSE_LL, LLMouseProc, hInstance, NULL);
-	MSG message;
+int MouseHookProc() {
+    // Start the hook and block.
+    // NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
+    int status = hook_run();
 
-	while (GetMessage(&message, NULL, NULL, NULL)) {
-		TranslateMessage(&message);
-		DispatchMessage(&message);
+    switch (status) {
+        case UIOHOOK_SUCCESS:
+            // Everything is ok.
+            break;
+
+        // System level errors.
+        case UIOHOOK_ERROR_OUT_OF_MEMORY:
+            logger(LOG_LEVEL_ERROR, "Failed to allocate memory. (%#X)", status);
+            break;
+
+
+        // X11 specific errors.
+        case UIOHOOK_ERROR_X_OPEN_DISPLAY:
+            logger(LOG_LEVEL_ERROR, "Failed to open X11 display. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_X_RECORD_NOT_FOUND:
+            logger(LOG_LEVEL_ERROR, "Unable to locate XRecord extension. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_X_RECORD_ALLOC_RANGE:
+            logger(LOG_LEVEL_ERROR, "Unable to allocate XRecord range. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_X_RECORD_CREATE_CONTEXT:
+            logger(LOG_LEVEL_ERROR, "Unable to allocate XRecord context. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_X_RECORD_ENABLE_CONTEXT:
+            logger(LOG_LEVEL_ERROR, "Failed to enable XRecord context. (%#X)", status);
+            break;
+
+            
+        // Windows specific errors.
+        case UIOHOOK_ERROR_SET_WINDOWS_HOOK_EX:
+            logger(LOG_LEVEL_ERROR, "Failed to register low level windows hook. (%#X)", status);
+            break;
+
+
+        // Darwin specific errors.
+        case UIOHOOK_ERROR_AXAPI_DISABLED:
+            logger(LOG_LEVEL_ERROR, "Failed to enable access for assistive devices. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_CREATE_EVENT_PORT:
+            logger(LOG_LEVEL_ERROR, "Failed to create apple event port. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_CREATE_RUN_LOOP_SOURCE:
+            logger(LOG_LEVEL_ERROR, "Failed to create apple run loop source. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_GET_RUNLOOP:
+            logger(LOG_LEVEL_ERROR, "Failed to acquire apple run loop. (%#X)", status);
+            break;
+
+        case UIOHOOK_ERROR_CREATE_OBSERVER:
+            logger(LOG_LEVEL_ERROR, "Failed to create apple run loop observer. (%#X)", status);
+            break;
+
+        // Default error.
+        case UIOHOOK_FAILURE:
+        default:
+            logger(LOG_LEVEL_ERROR, "An unknown hook error occurred. (%#X)", status);
+            break;
+    }
+
+    return status;
+}
+
+template <typename T>
+T GetFromAfterFXDll(std::string fn_name)
+{
+	HINSTANCE hDLL = LoadLibrary("AfterFXLib.dll");
+
+	if (!hDLL) {
+		logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.dll");
+		return nullptr;
 	}
 
-	UnhookWindowsHookEx(hMouseWheelHook);
+	T result = reinterpret_cast<T>(GetProcAddress(hDLL, fn_name.c_str()));
+
+	FreeLibrary(hDLL);
+	return result;
 }
 
 static	A_Err	IdleHook(
@@ -94,7 +264,21 @@ static	A_Err	IdleHook(
 {
 	A_Err err = A_Err_NONE;
 
-	if (S_zoom_delta) {
+	if (log_messages.size() > 0)
+	{
+		AEGP_SuiteHandler	suites(sP);
+
+		for (auto it = log_messages.begin(); it != log_messages.end();)
+		{
+			suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, log_messages[0].format);
+
+			std::lock_guard lock(S_mouse_wheel_mutex);
+			it = log_messages.erase(log_messages.begin());
+		}
+	}
+
+	if (S_zoom_delta) 
+	{
 		AEGP_SuiteHandler	suites(sP);
 
 		suites.UtilitySuite6()->AEGP_ExecuteScript(
@@ -104,10 +288,41 @@ static	A_Err	IdleHook(
 			nullptr,
 			nullptr
 		);
-		//suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, std::to_string(S_zoom_delta).c_str());
 
 		const std::lock_guard lock(S_mouse_wheel_mutex);
 		S_zoom_delta = 0;
+
+		/*
+		//suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, std::to_string(helpCtx).c_str());
+
+		auto gEgg = GetFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
+		//auto GetSelectedToolFn = GetFromAfterFXDll<GetSelectedTool>("?GetSelectedTool@CEggApp@@QEBA?AW4ToolID@@XZ");
+		auto GetActualPrimaryPreviewItemFn = 
+			GetFromAfterFXDll<GetActualPrimaryPreviewItem>(
+				"?GetActualPrimaryPreviewItem@CEggApp@@QEAAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
+			);
+		auto GetCurrentItemFn = 
+			GetFromAfterFXDll<GetCurrentItem>(
+				"?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z"
+			);
+		auto GetCurrentItemHFn = 
+			GetFromAfterFXDll<GetCurrentItemH>(
+				"?GetCurrentItemH@CEggApp@@QEAAPEAVBEE_Item@@XZ"
+			);
+
+		CPanoProjItem* view_pano = nullptr;
+		CDirProjItem* ccdir = nullptr;
+		//BEE_Item* bee_item = nullptr;
+		//GetCurrentItemFn(gEgg, &bee_item, &view_pano);
+		BEE_Item* bee_item = GetCurrentItemHFn(gEgg);
+		//GetActualPrimaryPreviewItemFn(gEgg, &view_pano, &ccdir, &bee_item, false, false, false);
+		//auto selectedTool = GetSelectedTool(gEgg);
+
+		if (bee_item)
+		{
+			suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "yesssssssssssssss");
+		}
+		*/
 	}
 
 	return err;
@@ -175,8 +390,31 @@ static A_Err CommandHook(
 
 static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP, AEGP_DeathRefcon refconP)
 {
-	DWORD mouse_thread_id = GetThreadId(S_mouse_events_thread.native_handle());
-	PostThreadMessage(mouse_thread_id, WM_QUIT, 0, 0);
+	//DWORD mouse_thread_id = GetThreadId(S_mouse_events_thread.native_handle());
+	//PostThreadMessage(mouse_thread_id, WM_QUIT, 0, 0);
+
+	int status = hook_stop();
+	switch (status) {
+		case UIOHOOK_SUCCESS:
+			// Everything is ok.
+			break;
+
+		// System level errors.
+		case UIOHOOK_ERROR_OUT_OF_MEMORY:
+			logger(LOG_LEVEL_ERROR, "Failed to allocate memory. (%#X)", status);
+			break;
+
+		case UIOHOOK_ERROR_X_RECORD_GET_CONTEXT:
+			// NOTE This is the only platform specific error that occurs on hook_stop().
+			logger(LOG_LEVEL_ERROR, "Failed to get XRecord context. (%#X)", status);
+			break;
+
+		// Default error.
+		case UIOHOOK_FAILURE:
+		default:
+			logger(LOG_LEVEL_ERROR, "An unknown hook error occurred. (%#X)", status);
+			break;
+	}
 
 	if (S_mouse_events_thread.joinable())
 	{
@@ -212,7 +450,10 @@ A_Err EntryPointFunc(
 		ERR2(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "Could not register command hook."));
 	}
 
-	S_mouse_events_thread = std::thread(CatchMouse);
+    // Set the event callback for uiohook events.
+    hook_set_dispatch_proc(&dispatch_proc, NULL);
+
+	S_mouse_events_thread = std::thread(MouseHookProc);
 
 	return err;
 }

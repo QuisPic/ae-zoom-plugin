@@ -19,3 +19,7 @@
 // This entry point is exported through the PiPL (.r file)
 extern "C" DllExport AEGP_PluginInitFuncPrototype EntryPointFunc;
 
+struct LogMessage {
+	unsigned int level = 0;
+	const char* format = nullptr;
+};

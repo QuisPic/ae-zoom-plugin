@@ -12,7 +12,7 @@ resource 'PiPL' (16000) {
 		},
 		/* [2] */
 		Name {
-			"Easy_Cheese"
+			"Zoom"
 		},
 		/* [3] */
 		Category {
