@@ -17,7 +17,11 @@ static SPBasicSuite*				sP = NULL;
 static float						S_zoom_delta = 0.0f;
 static bool							S_ctrl = false;
 static std::thread					S_mouse_events_thread;
+#ifdef AE_OS_WIN
 static HWND							S_main_hwnd;
+#elif defined AE_OS_MAC
+static CGEventRef					S_main_hwnd;
+#endif
 static std::vector<LogMessage>		log_messages;
 
 // mutexes
@@ -26,71 +30,6 @@ static std::mutex					S_mouse_wheel_mutex;
 static std::string zoom_script = {
 	#include "zoom-script.js"
 };
-
-bool isCursorInsideMainWnd()
-{
-	POINT cursorPos;
-	GetCursorPos(&cursorPos); // Get the cursor position in screen coordinates
-
-	ScreenToClient(S_main_hwnd, &cursorPos); // Convert the screen coordinates to client coordinates relative to the window
-
-	RECT clientRect;
-	GetClientRect(S_main_hwnd, &clientRect); // Get the client area of the window
-
-	// Check if the cursor is inside the client area
-	if (PtInRect(&clientRect, cursorPos))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-
-//LRESULT CALLBACK LLMouseProc(int nCode, WPARAM wParam, LPARAM lParam)
-//{
-//	if (nCode == HC_ACTION)
-//	{
-//		const bool is_ctrl_down = GetAsyncKeyState(VK_CONTROL) & 0x8000;
-//
-//		if (
-//			is_ctrl_down &&
-//			wParam == WM_MOUSEWHEEL && 
-//			S_main_hwnd == GetForegroundWindow() &&
-//			isCursorInsideMainWnd()
-//		) {
-//			const MSLLHOOKSTRUCT* pMouseStruct = std::bit_cast<MSLLHOOKSTRUCT*>(lParam);
-//			const short wheelDelta = GET_WHEEL_DELTA_WPARAM(pMouseStruct->mouseData);
-//
-//			if (wheelDelta)
-//			{
-//				const std::lock_guard lock(S_mouse_wheel_mutex);
-//				S_zoom_delta += wheelDelta / WHEEL_DELTA;
-//			}
-//
-//			// returning 1 stops this message from dispatching it to the main AE thread
-//			return 1;
-//		}
-//	}
-//
-//
-//	return CallNextHookEx(NULL, nCode, wParam, lParam);
-//}
-
-//void CatchMouse()
-//{
-//	HINSTANCE hInstance = GetModuleHandle(NULL);
-//	const HHOOK hMouseWheelHook = SetWindowsHookEx(WH_MOUSE_LL, LLMouseProc, hInstance, NULL);
-//	MSG message;
-//
-//	while (GetMessage(&message, NULL, NULL, NULL)) {
-//		TranslateMessage(&message);
-//		DispatchMessage(&message);
-//	}
-//
-//	UnhookWindowsHookEx(hMouseWheelHook);
-//}
 
 static void logger_proc(unsigned int level, void *user_data, const char *format, va_list args) {
     switch (level) {
@@ -112,6 +51,77 @@ static void logger(unsigned int level, const char *format, ...) {
     va_start(args, format);
     logger_proc(level, NULL, format, args);
     va_end(args);
+}
+
+template <typename T>
+T GetFromAfterFXDll(std::string fn_name)
+{
+	HINSTANCE hDLL = LoadLibrary("AfterFXLib.dll");
+
+	if (!hDLL) {
+		logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.dll");
+		return nullptr;
+	}
+
+	T result = reinterpret_cast<T>(GetProcAddress(hDLL, fn_name.c_str()));
+
+	FreeLibrary(hDLL);
+	return result;
+}
+
+void HackBipBop()
+{
+	AEGP_SuiteHandler	suites(sP);
+	//suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, std::to_string(helpCtx).c_str());
+
+	auto gEgg = GetFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
+	//auto GetSelectedToolFn = GetFromAfterFXDll<GetSelectedTool>("?GetSelectedTool@CEggApp@@QEBA?AW4ToolID@@XZ");
+	auto GetActualPrimaryPreviewItemFn = 
+		GetFromAfterFXDll<GetActualPrimaryPreviewItem>(
+			"?GetActualPrimaryPreviewItem@CEggApp@@QEAAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
+		);
+	auto GetCurrentItemFn = 
+		GetFromAfterFXDll<GetCurrentItem>(
+			"?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z"
+		);
+	auto GetCurrentItemHFn = 
+		GetFromAfterFXDll<GetCurrentItemH>(
+			"?GetCurrentItemH@CEggApp@@QEAAPEAVBEE_Item@@XZ"
+		);
+
+	CPanoProjItem* view_pano = nullptr;
+	CDirProjItem* ccdir = nullptr;
+	//BEE_Item* bee_item = nullptr;
+	//GetCurrentItemFn(gEgg, &bee_item, &view_pano);
+	BEE_Item* bee_item = GetCurrentItemHFn(gEgg);
+	//GetActualPrimaryPreviewItemFn(gEgg, &view_pano, &ccdir, &bee_item, false, false, false);
+	//auto selectedTool = GetSelectedTool(gEgg);
+
+	if (bee_item)
+	{
+		suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "yesssssssssssssss");
+	}
+}
+
+bool isCursorInsideMainWnd()
+{
+	POINT cursorPos;
+	GetCursorPos(&cursorPos); // Get the cursor position in screen coordinates
+
+	ScreenToClient(S_main_hwnd, &cursorPos); // Convert the screen coordinates to client coordinates relative to the window
+
+	RECT clientRect;
+	GetClientRect(S_main_hwnd, &clientRect); // Get the client area of the window
+
+	// Check if the cursor is inside the client area
+	if (PtInRect(&clientRect, cursorPos))
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 void dispatch_proc(uiohook_event * const event, void *user_data) {
@@ -241,22 +251,6 @@ int MouseHookProc() {
     return status;
 }
 
-template <typename T>
-T GetFromAfterFXDll(std::string fn_name)
-{
-	HINSTANCE hDLL = LoadLibrary("AfterFXLib.dll");
-
-	if (!hDLL) {
-		logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.dll");
-		return nullptr;
-	}
-
-	T result = reinterpret_cast<T>(GetProcAddress(hDLL, fn_name.c_str()));
-
-	FreeLibrary(hDLL);
-	return result;
-}
-
 static	A_Err	IdleHook(
 	AEGP_GlobalRefcon	plugin_refconP,
 	AEGP_IdleRefcon		refconP,
@@ -292,37 +286,6 @@ static	A_Err	IdleHook(
 		const std::lock_guard lock(S_mouse_wheel_mutex);
 		S_zoom_delta = 0;
 
-		/*
-		//suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, std::to_string(helpCtx).c_str());
-
-		auto gEgg = GetFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
-		//auto GetSelectedToolFn = GetFromAfterFXDll<GetSelectedTool>("?GetSelectedTool@CEggApp@@QEBA?AW4ToolID@@XZ");
-		auto GetActualPrimaryPreviewItemFn = 
-			GetFromAfterFXDll<GetActualPrimaryPreviewItem>(
-				"?GetActualPrimaryPreviewItem@CEggApp@@QEAAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
-			);
-		auto GetCurrentItemFn = 
-			GetFromAfterFXDll<GetCurrentItem>(
-				"?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z"
-			);
-		auto GetCurrentItemHFn = 
-			GetFromAfterFXDll<GetCurrentItemH>(
-				"?GetCurrentItemH@CEggApp@@QEAAPEAVBEE_Item@@XZ"
-			);
-
-		CPanoProjItem* view_pano = nullptr;
-		CDirProjItem* ccdir = nullptr;
-		//BEE_Item* bee_item = nullptr;
-		//GetCurrentItemFn(gEgg, &bee_item, &view_pano);
-		BEE_Item* bee_item = GetCurrentItemHFn(gEgg);
-		//GetActualPrimaryPreviewItemFn(gEgg, &view_pano, &ccdir, &bee_item, false, false, false);
-		//auto selectedTool = GetSelectedTool(gEgg);
-
-		if (bee_item)
-		{
-			suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "yesssssssssssssss");
-		}
-		*/
 	}
 
 	return err;
@@ -333,28 +296,10 @@ static A_Err UpdateMenuHook(
 	AEGP_UpdateMenuRefcon	refconPV,			/* >> */
 	AEGP_WindowType			active_window)		/* >> */
 {
-	A_Err 				err = A_Err_NONE,
-						err2 = A_Err_NONE;
-
-	AEGP_ItemH			active_itemH = NULL;
-
-	AEGP_ItemType		item_type = AEGP_ItemType_NONE;
-
+	A_Err 				err = A_Err_NONE;
 	AEGP_SuiteHandler	suites(sP);
 
-	err = suites.ItemSuite6()->AEGP_GetActiveItem(&active_itemH);
-
-	if (!err && active_itemH) {
-		err = suites.ItemSuite6()->AEGP_GetItemType(active_itemH, &item_type);
-
-		if (!err && (AEGP_ItemType_COMP == item_type ||
-			AEGP_ItemType_FOOTAGE == item_type)) {
-			ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_zoom_cmd));
-		}
-	}
-	else {
-		ERR2(suites.CommandSuite1()->AEGP_DisableCommand(S_zoom_cmd));
-	}
+	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_zoom_cmd));
 	return err;
 }
 
@@ -376,6 +321,7 @@ static A_Err CommandHook(
 
 	try {
 		if (S_zoom_cmd == command) {
+			HackBipBop();
 			*handledPB = TRUE;
 		}
 	}
@@ -438,6 +384,9 @@ A_Err EntryPointFunc(
 	A_Err err2 = A_Err_NONE;
 	AEGP_SuiteHandler suites(sP);
 
+	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_zoom_cmd));
+	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_zoom_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
+
 	ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
 	ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(S_zoom_id, UpdateMenuHook, 0));
 	ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
@@ -451,9 +400,9 @@ A_Err EntryPointFunc(
 	}
 
     // Set the event callback for uiohook events.
-    hook_set_dispatch_proc(&dispatch_proc, NULL);
+    //hook_set_dispatch_proc(&dispatch_proc, NULL);
 
-	S_mouse_events_thread = std::thread(MouseHookProc);
+	//S_mouse_events_thread = std::thread(MouseHookProc);
 
 	return err;
 }
