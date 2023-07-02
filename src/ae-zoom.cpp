@@ -1,4 +1,4 @@
-﻿#include <mutex>
+#include <mutex>
 #include <thread>
 #include <string>
 #include <vector>
@@ -18,9 +18,9 @@ static float						S_zoom_delta = 0.0f;
 static bool							S_ctrl = false;
 static std::thread					S_mouse_events_thread;
 #ifdef AE_OS_WIN
-static HWND							S_main_hwnd;
+static HWND							S_main_win_h;
 #elif defined AE_OS_MAC
-static CGEventRef					S_main_hwnd;
+static AXUIElementRef               S_main_win_h;
 #endif
 static std::vector<LogMessage>		log_messages;
 
@@ -53,6 +53,67 @@ static void logger(unsigned int level, const char *format, ...) {
     va_end(args);
 }
 
+#ifdef AE_OS_MAC
+void GetMainMacWindow(AXUIElementRef* mainWindow)
+{
+    // Get the current process ID
+    pid_t currentProcessID = getpid();
+
+    // Create an application reference for the current process
+    AXUIElementRef appRef = AXUIElementCreateApplication(currentProcessID);
+
+    // Get the main window element of the application
+    AXUIElementCopyAttributeValue(appRef, kAXMainWindowAttribute, (CFTypeRef*)mainWindow);
+
+    // Release the main window object
+//    CFRelease(mainWindow);
+
+    // Release the application reference
+    CFRelease(appRef);
+}
+#endif
+
+bool IsCursorInsideMainWindow() {
+    bool isInside = false;
+#ifdef AE_OS_MAC
+    // Get the window position and size
+    CFTypeRef positionValue;
+    AXUIElementCopyAttributeValue(S_main_win_h, kAXPositionAttribute, &positionValue);
+    CGPoint position;
+    AXValueGetValue((AXValueRef)positionValue, AXValueType::kAXValueTypeCGPoint, &position);
+
+    CFTypeRef sizeValue;
+    AXUIElementCopyAttributeValue(S_main_win_h, kAXSizeAttribute, &sizeValue);
+    CGSize size;
+    AXValueGetValue((AXValueRef)sizeValue, AXValueType::kAXValueTypeCGSize, &size);
+    
+    // Create window frame
+    CGRect windowFrame = CGRectMake(position.x, position.y, size.width, size.height);
+
+    // Get the cursor position
+    CGEventRef event = CGEventCreate(NULL);
+    CGPoint cursorPosition = CGEventGetLocation(event);
+    CFRelease(event);
+
+    // Check if the cursor is inside the window's frame
+    isInside = CGRectContainsPoint(windowFrame, cursorPosition);
+#elif defined AE_OS_WIN
+    POINT cursorPos;
+    GetCursorPos(&cursorPos); // Get the cursor position in screen coordinates
+
+    ScreenToClient(S_main_win_h, &cursorPos); // Convert the screen coordinates to client coordinates relative to the window
+
+    RECT clientRect;
+    GetClientRect(S_main_win_h, &clientRect); // Get the client area of the window
+
+    // Check if the cursor is inside the client area
+    isInside = PtInRect(&clientRect, cursorPos))
+#endif
+    
+    return isInside;
+}
+
+#ifdef AE_OS_WIN
 template <typename T>
 T GetFromAfterFXDll(std::string fn_name)
 {
@@ -102,27 +163,7 @@ void HackBipBop()
 		suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "yesssssssssssssss");
 	}
 }
-
-bool isCursorInsideMainWnd()
-{
-	POINT cursorPos;
-	GetCursorPos(&cursorPos); // Get the cursor position in screen coordinates
-
-	ScreenToClient(S_main_hwnd, &cursorPos); // Convert the screen coordinates to client coordinates relative to the window
-
-	RECT clientRect;
-	GetClientRect(S_main_hwnd, &clientRect); // Get the client area of the window
-
-	// Check if the cursor is inside the client area
-	if (PtInRect(&clientRect, cursorPos))
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
+#endif
 
 void dispatch_proc(uiohook_event * const event, void *user_data) {
     switch (event->type) {
@@ -156,8 +197,8 @@ void dispatch_proc(uiohook_event * const event, void *user_data) {
 		break;
 	case EVENT_MOUSE_WHEEL:
 		if (
-			S_main_hwnd == GetForegroundWindow() &&
-			isCursorInsideMainWnd()
+//			S_main_win_h == GetForegroundWindow() &&
+            IsCursorInsideMainWindow()
 		) {
 			if (S_ctrl && event->data.wheel.delta)
 			{
@@ -321,7 +362,7 @@ static A_Err CommandHook(
 
 	try {
 		if (S_zoom_cmd == command) {
-			HackBipBop();
+//			HackBipBop();
 			*handledPB = TRUE;
 		}
 	}
@@ -392,8 +433,13 @@ A_Err EntryPointFunc(
 	ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
 	ERR(suites.RegisterSuite5()->AEGP_RegisterDeathHook(S_zoom_id, DeathHook, 0));
 
-	suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_hwnd);
+#ifdef AE_OS_WIN
+	suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h);
+#elif defined AE_OS_MAC
+    GetMainMacWindow(&S_main_win_h);
+#endif
 
+    ERR2(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "AAAAAAAAAaaaaaaaaaaa."));
 	if (err)
 	{
 		ERR2(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "Could not register command hook."));
