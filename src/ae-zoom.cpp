@@ -424,7 +424,7 @@ A_Err EntryPointFunc(
 	A_Err err = A_Err_NONE;
 	A_Err err2 = A_Err_NONE;
 	AEGP_SuiteHandler suites(sP);
-
+    
 	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_zoom_cmd));
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_zoom_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
 
@@ -439,16 +439,15 @@ A_Err EntryPointFunc(
     GetMainMacWindow(&S_main_win_h);
 #endif
 
-    ERR2(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "AAAAAAAAAaaaaaaaaaaa."));
 	if (err)
 	{
 		ERR2(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "Could not register command hook."));
 	}
 
     // Set the event callback for uiohook events.
-    //hook_set_dispatch_proc(&dispatch_proc, NULL);
+    hook_set_dispatch_proc(&dispatch_proc, NULL);
 
-	//S_mouse_events_thread = std::thread(MouseHookProc);
+	S_mouse_events_thread = std::thread(MouseHookProc);
 
 	return err;
 }
