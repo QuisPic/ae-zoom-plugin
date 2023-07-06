@@ -107,7 +107,7 @@ elseif( APPLE )
 	#PkgInfo
 	add_custom_command(
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/PkgInfo
-		COMMAND echo "AEgxFXTC" >> ${CMAKE_CURRENT_BINARY_DIR}/PkgInfo
+		COMMAND echo "AEgxFXTC" > ${CMAKE_CURRENT_BINARY_DIR}/PkgInfo
 	)
 	set_source_files_properties(
 		${CMAKE_CURRENT_BINARY_DIR}/PkgInfo

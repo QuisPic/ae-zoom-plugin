@@ -7,6 +7,10 @@
 #include "ae.h"
 #include "uiohook.h"
 
+#ifdef AE_OS_MAC
+#include <objc/objc-runtime.h>
+#endif
+
 // Macros for reading a file to a string at compile time
 #define STRINGIFY(...) #__VA_ARGS__
 #define STR(...) STRINGIFY(__VA_ARGS__)
@@ -18,9 +22,9 @@ static float						S_zoom_delta = 0.0f;
 static bool							S_ctrl = false;
 static std::thread					S_mouse_events_thread;
 #ifdef AE_OS_WIN
-static HWND							S_main_win_h;
+static HWND							S_main_win_h = nullptr;
 #elif defined AE_OS_MAC
-static AXUIElementRef               S_main_win_h;
+static int                          S_main_win_id = -1;
 #endif
 static std::vector<LogMessage>		log_messages;
 
@@ -54,49 +58,61 @@ static void logger(unsigned int level, const char *format, ...) {
 }
 
 #ifdef AE_OS_MAC
-void GetMainMacWindow(AXUIElementRef* mainWindow)
+void GetMainWindowId()
 {
-    // Get the current process ID
-    pid_t currentProcessID = getpid();
+    // Get the list of all windows
+    CFArrayRef windowList = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
 
-    // Create an application reference for the current process
-    AXUIElementRef appRef = AXUIElementCreateApplication(currentProcessID);
+    // Get the PID of the current process
+    int pid = getpid();
 
-    // Get the main window element of the application
-    AXUIElementCopyAttributeValue(appRef, kAXMainWindowAttribute, (CFTypeRef*)mainWindow);
+    // Iterate through the windows to find the one that belongs to the current process
+    for (int i = 0; i < CFArrayGetCount(windowList); i++) {
+        CFDictionaryRef window = (CFDictionaryRef)CFArrayGetValueAtIndex(windowList, i);
+        CFNumberRef windowPID = (CFNumberRef)CFDictionaryGetValue(window, kCGWindowOwnerPID);
 
-    // Release the main window object
-//    CFRelease(mainWindow);
+        int windowPIDValue;
+        CFNumberGetValue(windowPID, kCFNumberIntType, &windowPIDValue);
 
-    // Release the application reference
-    CFRelease(appRef);
+        if (windowPIDValue == pid) {
+            CFNumberRef winID = (CFNumberRef)CFDictionaryGetValue(window, kCGWindowNumber);
+            CFNumberGetValue(winID, kCFNumberIntType, &S_main_win_id);
+            break;
+        }
+    }
+
+    CFRelease(windowList);
 }
 #endif
 
 bool IsCursorInsideMainWindow() {
     bool isInside = false;
 #ifdef AE_OS_MAC
-    // Get the window position and size
-    CFTypeRef positionValue;
-    AXUIElementCopyAttributeValue(S_main_win_h, kAXPositionAttribute, &positionValue);
-    CGPoint position;
-    AXValueGetValue((AXValueRef)positionValue, AXValueType::kAXValueTypeCGPoint, &position);
-
-    CFTypeRef sizeValue;
-    AXUIElementCopyAttributeValue(S_main_win_h, kAXSizeAttribute, &sizeValue);
-    CGSize size;
-    AXValueGetValue((AXValueRef)sizeValue, AXValueType::kAXValueTypeCGSize, &size);
+    if (S_main_win_id == -1)
+    {
+        GetMainWindowId();
+    }
     
-    // Create window frame
-    CGRect windowFrame = CGRectMake(position.x, position.y, size.width, size.height);
+    // Get the window's frame
+    CFArrayRef CFWinArray = CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, S_main_win_id);
+    
+    if (CFArrayGetCount(CFWinArray) > 0)
+    {
+        CFDictionaryRef main_win = (CFDictionaryRef)CFArrayGetValueAtIndex(CFWinArray, 0);
+        CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(main_win, kCGWindowBounds);
+        CGRect windowFrame;
+        CGRectMakeWithDictionaryRepresentation(bounds, &windowFrame);
+        
+        // Get the cursor position
+        CGEventRef event = CGEventCreate(NULL);
+        CGPoint cursorPosition = CGEventGetLocation(event);
+        CFRelease(event);
 
-    // Get the cursor position
-    CGEventRef event = CGEventCreate(NULL);
-    CGPoint cursorPosition = CGEventGetLocation(event);
-    CFRelease(event);
-
-    // Check if the cursor is inside the window's frame
-    isInside = CGRectContainsPoint(windowFrame, cursorPosition);
+        // Check if the cursor is inside the window's frame
+        isInside = CGRectContainsPoint(windowFrame, cursorPosition);
+    }
+    
+    CFRelease(CFWinArray);
 #elif defined AE_OS_WIN
     POINT cursorPos;
     GetCursorPos(&cursorPos); // Get the cursor position in screen coordinates
@@ -298,6 +314,13 @@ static	A_Err	IdleHook(
 	A_long* max_sleepPL)
 {
 	A_Err err = A_Err_NONE;
+    
+#ifdef AE_OS_MAC
+    if (!S_main_win_id)
+    {
+        GetMainWindowId();
+    }
+#endif
 
 	if (log_messages.size() > 0)
 	{
@@ -377,9 +400,6 @@ static A_Err CommandHook(
 
 static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP, AEGP_DeathRefcon refconP)
 {
-	//DWORD mouse_thread_id = GetThreadId(S_mouse_events_thread.native_handle());
-	//PostThreadMessage(mouse_thread_id, WM_QUIT, 0, 0);
-
 	int status = hook_stop();
 	switch (status) {
 		case UIOHOOK_SUCCESS:
@@ -435,8 +455,6 @@ A_Err EntryPointFunc(
 
 #ifdef AE_OS_WIN
 	suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h);
-#elif defined AE_OS_MAC
-    GetMainMacWindow(&S_main_win_h);
 #endif
 
 	if (err)
