@@ -3,21 +3,46 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
+include(FetchContent)
+
 project ("ae-zoom")
+set( CMAKE_CXX_STANDARD 20 )
 
 add_subdirectory(extern)
+
+if( APPLE )
+	# Create Universal Binary
+	#set( CMAKE_OSX_ARCHITECTURES "arm64;x86_64" )
+
+	# Disable warnings
+	add_compile_options(
+		-Wno-pragma-pack
+	)
+endif()
 
 add_library(
 	${PROJECT_NAME}
 	MODULE
 	src/ae-zoom.cpp
- "include/ae.h")
+ )
 
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
 	include
 )
+
+# Fetch JSON library
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz)
+FetchContent_MakeAvailable(json)
+
+# Fetch uiohook library
+FetchContent_Declare(
+	uiohook 
+	GIT_REPOSITORY https://github.com/kwhat/libuiohook.git
+	GIT_TAG 1.3
+)
+FetchContent_MakeAvailable(uiohook)
 
 if( WIN32 )
 	set(
@@ -52,7 +77,7 @@ if( WIN32 )
 elseif( APPLE )
 	set(
 		PLUGIN_FOLDER
-		"/Applications/Adobe After Effects 2020/Plug-ins/"
+		"/Applications/Adobe After Effects 2022/Plug-ins"
 		CACHE
 		STRING
 		"After Effects Plugin folder"
@@ -81,22 +106,19 @@ elseif( APPLE )
 endif()
 
 target_link_libraries(
-	${PROJECT_NAME}
+	${PROJECT_NAME} PRIVATE
 	AESDK
 	uiohook
-)
-
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
-endif()
-
-install(
-	TARGETS ${PROJECT_NAME}
-	DESTINATION ${PLUGIN_FOLDER}
+	nlohmann_json::nlohmann_json
 )
 
 if( WIN32 )
 	set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".aex")
+
+	install(
+		FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.aex"
+		DESTINATION "${PLUGIN_FOLDER}/"
+	)
 elseif( APPLE )
 	set_target_properties( ${PROJECT_NAME} PROPERTIES PREFIX "" )
 	set_target_properties( ${PROJECT_NAME} PROPERTIES SUFFIX "" )
@@ -115,6 +137,13 @@ elseif( APPLE )
 		MACOSX_PACKAGE_LOCATION ""
 	)
 	target_sources( ${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/PkgInfo )
+
+	install(
+		DIRECTORY "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.plugin"
+		DESTINATION "${PLUGIN_FOLDER}/"
+	)
 endif()
 
-# TODO: Add tests and install targets if needed.
+if ( REMOTE_MAC_BUILD )
+	execute_process(COMMAND zsh "-c" "${CMAKE_CURRENT_SOURCE_DIR}/sh/symlink-macos-frameworks.sh")
+endif()

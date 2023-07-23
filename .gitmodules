@@ -1,4 +1,0 @@
-[submodule "extern/libuiohook"]
-	path = extern/libuiohook
-	url = https://github.com/kwhat/libuiohook.git
-	branch = 1.3
