@@ -1,47 +1,49 @@
-#include <mutex>
-#include <thread>
-#include <string>
-#include <vector>
-#include <optional>
-
 #include "ae-zoom.h"
-#include "ae.h"
 
 #ifdef AE_OS_MAC
 #include <objc/objc-runtime.h>
 #endif
 
-// Macros for reading a file to a string at compile time
+/* Macros for reading a file to a string at compile time */
 #define STRINGIFY(...) #__VA_ARGS__
 #define STR(...) STRINGIFY(__VA_ARGS__)
 
-static AEGP_Command					S_zoom_cmd = 0L;
-static AEGP_Command					S_init_js_bridge_cmd = 0L;
-static AEGP_Command					S_start_key_capture_cmd = 0L;
-static AEGP_Command					S_stop_key_capture_cmd = 0L;
+static AEGP_Command							S_zoom_cmd = 0L;
+static AEGP_Command							S_init_js_bridge_cmd = 0L;
+static AEGP_Command							S_start_key_capture_cmd = 0L;
+static AEGP_Command							S_stop_key_capture_cmd = 0L;
+static AEGP_Command							S_update_key_binds_cmd = 0L;
 
-static AEGP_PluginID				S_zoom_id = 0L;
-static SPBasicSuite*				sP = NULL;
+static AEGP_PluginID						S_zoom_id = 0L;
+static SPBasicSuite*						sP = NULL;
 
 static A_Err (*S_call_idle_routines)(void) = nullptr;
 
-static float						S_zoom_delta = 0.0f;
-static bool							S_is_creating_key_bind = false;
-static std::optional<KeyBind>		S_create_key_bind_pass;
+static float								S_zoom_delta = 0.0f;
+static bool									S_is_creating_key_bind = false;
+static std::optional<KeyCodes>				S_key_codes_pass;
+static std::vector<KeyBindAction>			S_key_bindings;
 
 #ifdef AE_OS_WIN
-static HWND							S_main_win_h = nullptr;
+static HWND									S_main_win_h = nullptr;
 #elif defined AE_OS_MAC
-static int                          S_main_win_id = -1;
+static int									S_main_win_id = -1;
 #endif
-static std::vector<LogMessage>		log_messages;
 
-static std::thread					S_mouse_events_thread;
-static std::mutex					S_mouse_wheel_mutex;
-static std::mutex					S_create_key_bind_mutex;
+static std::vector<LogMessage>				log_messages;
+static std::vector<KeyBindAction*>			S_zoom_actions;
 
-static std::string zoom_script = {
-	#include "JS/zoom-script.js"
+static std::thread							S_mouse_events_thread;
+static std::mutex							S_create_key_bind_mutex;
+static std::mutex							S_zoom_action_mutex;
+static std::mutex							S_log_mutex;
+
+static std::string zoom_increment_js = {
+	#include "JS/zoom-increment.js"
+};
+
+static std::string zoom_set_to_js = {
+	#include "JS/zoom-set-to.js"
 };
 
 static std::string save_cmd_ids_js = {
@@ -59,7 +61,7 @@ static void logger_proc(unsigned int level, void *user_data, const char *format,
 
         case LOG_LEVEL_WARN:
         case LOG_LEVEL_ERROR:
-			std::lock_guard lock(S_mouse_wheel_mutex);
+			std::lock_guard lock(S_log_mutex);
 			log_messages.push_back({ level, format });
             break;
     }
@@ -71,6 +73,47 @@ static void logger(unsigned int level, const char *format, ...) {
     va_start(args, format);
     logger_proc(level, NULL, format, args);
     va_end(args);
+}
+
+static A_Err ReadKeyBindings()
+{
+	A_Err err = A_Err_NONE;
+	AEGP_SuiteHandler	suites(sP);
+	AEGP_PersistentBlobH blobH;
+	A_char key_bindings_buf[2000];
+
+	if (S_key_bindings.size() > 0)
+	{
+		S_key_bindings.clear();
+	}
+
+	ERR(suites.PersistentDataSuite4()->AEGP_GetApplicationBlob(AEGP_PersistentType_MACHINE_SPECIFIC, &blobH));
+
+	if (blobH)
+	{
+		ERR(suites.PersistentDataSuite4()->AEGP_GetString(
+			blobH,
+			SETTINGS_SECTION_NAME,
+			"keyBindings",
+			nullptr,
+			2000,
+			key_bindings_buf,
+			nullptr
+		));
+
+		json key_bindings_json = json::parse(std::string(key_bindings_buf));
+
+		for (const auto& kbind_j : key_bindings_json) {
+			if (!kbind_j["enabled"])
+			{
+				continue;
+			}
+
+			S_key_bindings.emplace_back(kbind_j.get<KeyBindAction>());
+		}
+	}
+
+	return err;
 }
 
 #ifdef AE_OS_MAC
@@ -138,8 +181,8 @@ bool isMainWindowActive()
 #endif
 }
 
-bool IsCursorInsideMainWindow() {
-    bool isInside = false;
+bool IsCursorOnMainWindow() {
+    bool isOverWindow = false;
 #ifdef AE_OS_MAC
     if (S_main_win_id == -1)
     {
@@ -161,78 +204,62 @@ bool IsCursorInsideMainWindow() {
         CGPoint cursorPosition = CGEventGetLocation(event);
         CFRelease(event);
 
-        // Check if the cursor is inside the window's frame
-        isInside = CGRectContainsPoint(windowFrame, cursorPosition);
+        // Check if the cursor is over the window's frame
+        isOverWindow = CGRectContainsPoint(windowFrame, cursorPosition);
     }
     
     CFRelease(CFWinArray);
 #elif defined AE_OS_WIN
-    POINT cursorPos;
-    GetCursorPos(&cursorPos); // Get the cursor position in screen coordinates
+	static auto isPointInsideWindow = [](HWND hwnd, POINT cursor_p, WIND_RECT rect_type) -> bool
+	{
+		RECT win_rect = { 0, 0, 0, 0 };
 
-    ScreenToClient(S_main_win_h, &cursorPos); // Convert the screen coordinates to client coordinates relative to the window
+		if (rect_type == WIND_RECT::FULL)
+		{
+			GetWindowRect(hwnd, &win_rect); // Get the area of the window
+		}
+		else if (rect_type == WIND_RECT::CLIENT)
+		{
+			ScreenToClient(hwnd, &cursor_p); // Convert the screen coordinates to client coordinates relative to the window
+			GetClientRect(hwnd, &win_rect); // Get the client area of the window
+		}
 
-    RECT clientRect;
-    GetClientRect(S_main_win_h, &clientRect); // Get the client area of the window
+		return PtInRect(&win_rect, cursor_p); // Check if the cursor is inside the area
+	};
 
-    // Check if the cursor is inside the client area
-    isInside = PtInRect(&clientRect, cursorPos);
+    POINT cursor_pos;
+    GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
+
+	/* Check if cursor is inside AE main window */
+	isOverWindow = isPointInsideWindow(S_main_win_h, cursor_pos, WIND_RECT::CLIENT);
+
+	/* If cursor is inside we need to check if it's over any window in front the main window*/
+	if (isOverWindow)
+	{
+		DWORD main_process_id;
+		GetWindowThreadProcessId(S_main_win_h, &main_process_id);
+		HWND front_hwnd = GetWindow(S_main_win_h, GW_HWNDPREV);
+
+		while (front_hwnd)
+		{
+			DWORD front_process_id;
+			GetWindowThreadProcessId(front_hwnd, &front_process_id);
+
+			if (IsWindowVisible(front_hwnd) && 
+				main_process_id != front_process_id &&
+				isPointInsideWindow(front_hwnd, cursor_pos, WIND_RECT::FULL))
+			{
+				isOverWindow = false;
+				break;
+			}
+
+			front_hwnd = GetWindow(front_hwnd, GW_HWNDPREV);
+		}
+	}
 #endif
     
-    return isInside;
+    return isOverWindow;
 }
-
-#ifdef AE_OS_WIN
-template <typename T>
-T GetFromAfterFXDll(std::string fn_name)
-{
-	HINSTANCE hDLL = LoadLibrary("AfterFXLib.dll");
-
-	if (!hDLL) {
-		logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.dll");
-		return nullptr;
-	}
-
-	T result = reinterpret_cast<T>(GetProcAddress(hDLL, fn_name.c_str()));
-
-	FreeLibrary(hDLL);
-	return result;
-}
-
-void HackBipBop()
-{
-	AEGP_SuiteHandler	suites(sP);
-	//suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, std::to_string(helpCtx).c_str());
-
-	auto gEgg = GetFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
-	//auto GetSelectedToolFn = GetFromAfterFXDll<GetSelectedTool>("?GetSelectedTool@CEggApp@@QEBA?AW4ToolID@@XZ");
-	auto GetActualPrimaryPreviewItemFn = 
-		GetFromAfterFXDll<GetActualPrimaryPreviewItem>(
-			"?GetActualPrimaryPreviewItem@CEggApp@@QEAAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
-		);
-	auto GetCurrentItemFn = 
-		GetFromAfterFXDll<GetCurrentItem>(
-			"?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z"
-		);
-	auto GetCurrentItemHFn = 
-		GetFromAfterFXDll<GetCurrentItemH>(
-			"?GetCurrentItemH@CEggApp@@QEAAPEAVBEE_Item@@XZ"
-		);
-
-	CPanoProjItem* view_pano = nullptr;
-	CDirProjItem* ccdir = nullptr;
-	//BEE_Item* bee_item = nullptr;
-	//GetCurrentItemFn(gEgg, &bee_item, &view_pano);
-	BEE_Item* bee_item = GetCurrentItemHFn(gEgg);
-	//GetActualPrimaryPreviewItemFn(gEgg, &view_pano, &ccdir, &bee_item, false, false, false);
-	//auto selectedTool = GetSelectedTool(gEgg);
-
-	if (bee_item)
-	{
-		suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "yesssssssssssssss");
-	}
-}
-#endif
 
 void dispatch_proc(uiohook_event * const event, void *user_data) {
 	static uint16_t last_key_code = VC_UNDEFINED;
@@ -262,14 +289,50 @@ void dispatch_proc(uiohook_event * const event, void *user_data) {
 				}
 			}
 
-			// if current keys are not the same as previous time
 			const std::lock_guard lock(S_create_key_bind_mutex);
-			S_create_key_bind_pass.emplace(event);
+			S_key_codes_pass.emplace(event);
+
+			// event->reserved = 0x1; // stop event propagation
 
 			S_call_idle_routines();
 		}
+		else if ((event->type == EVENT_KEY_PRESSED && isMainWindowActive()) ||
+				((event->type == EVENT_MOUSE_PRESSED || 
+				event->type == EVENT_MOUSE_WHEEL) && IsCursorOnMainWindow()))
+		{
+			KeyCodes current_key_codes(event);
+			bool key_bind_found = false;
+
+			for (KeyBindAction& kbind : S_key_bindings)
+			{
+				if (current_key_codes == kbind.keyCodes)
+				{
+					std::lock_guard lock(S_zoom_action_mutex);
+					S_zoom_actions.push_back(&kbind);
+
+					key_bind_found = true;
+				}
+			}
+
+			if (key_bind_found)
+			{
+				bool isType = event->type == EVENT_MOUSE_PRESSED;
+				bool isMask =	event->mask & (MASK_CTRL) ||
+								event->mask & (MASK_META) ||
+								event->mask & (MASK_SHIFT) ||
+								event->mask & (MASK_ALT);
+				bool isButton = event->data.mouse.button == 1 || event->data.mouse.button == 2;
+
+				/* Do not stop event propagation on pure mouse clicks */
+				if (!(isType && !isMask && isButton))
+				{
+					event->reserved = 0x1; // stop event propagation
+				}
+			}
+		}
 	}
 	else if (
+		S_is_creating_key_bind &&
 		event->type == EVENT_KEY_RELEASED && 
 		event->data.keyboard.keycode == last_key_code
 	)
@@ -278,7 +341,7 @@ void dispatch_proc(uiohook_event * const event, void *user_data) {
 	}
 }
 
-int MouseHookProc() {
+int HookProc() {
     // Start the hook and block.
     // NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
     int status = hook_run();
@@ -366,54 +429,73 @@ static	A_Err	IdleHook(
 
 		for (auto it = log_messages.begin(); it != log_messages.end();)
 		{
-			suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, log_messages[0].format);
+			ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, it->format));
 
-			std::lock_guard lock(S_mouse_wheel_mutex);
+			std::lock_guard lock(S_log_mutex);
 			it = log_messages.erase(log_messages.begin());
 		}
 	}
 
-	if (S_create_key_bind_pass) {
+	if (S_is_creating_key_bind && S_key_codes_pass) {
 		AEGP_SuiteHandler	suites(sP);
-		KeyBind& keyBind = S_create_key_bind_pass.value();
+		KeyCodes& keyCodes = S_key_codes_pass.value();
 
 		std::string pass_fn_str =
 			pass_key_bind_js +
 			"(" +
-			std::to_string(keyBind.type) +
+			std::to_string(keyCodes.type) +
 			"," +
-			std::to_string(keyBind.mask) +
+			std::to_string(keyCodes.mask) +
 			"," +
-			std::to_string(keyBind.keycode) +
+			std::to_string(keyCodes.keycode) +
 			")";
 
-		suites.UtilitySuite6()->AEGP_ExecuteScript(
+		ERR(suites.UtilitySuite6()->AEGP_ExecuteScript(
 			S_zoom_id,
 			pass_fn_str.c_str(),
 			false,
 			nullptr,
 			nullptr
-		);
+		));
 
 		const std::lock_guard lock(S_create_key_bind_mutex);
-		S_create_key_bind_pass.reset();
+		S_key_codes_pass.reset();
 	}
 
-	if (S_zoom_delta) 
+	if (S_zoom_actions.size() > 0) 
 	{
 		AEGP_SuiteHandler	suites(sP);
+		std::string script_str;
 
-		suites.UtilitySuite6()->AEGP_ExecuteScript(
-			S_zoom_id,
-			(zoom_script + "(" + std::to_string(S_zoom_delta) + ")").c_str(),
-			false,
-			nullptr,
-			nullptr
-		);
+		const std::lock_guard lock(S_zoom_action_mutex);
 
-		const std::lock_guard lock(S_mouse_wheel_mutex);
-		S_zoom_delta = 0;
+		for (const auto act : S_zoom_actions)
+		{
+			switch (act->action)
+			{
+			case KB_ACTION::INCREASE:
+				script_str = zoom_increment_js + "(" + std::to_string(act->amount) + ")";
+				break;
+			case KB_ACTION::DECREASE:
+				script_str = zoom_increment_js + "(" + std::to_string(-act->amount) + ")";
+				break;
+			case KB_ACTION::SET_TO:
+				script_str = zoom_set_to_js + "(" + std::to_string(act->amount) + ")";
+				break;
+			default:
+				break;
+			}
 
+			ERR(suites.UtilitySuite6()->AEGP_ExecuteScript(
+				S_zoom_id,
+				script_str.c_str(),
+				false,
+				nullptr,
+				nullptr
+			));
+		}
+
+		S_zoom_actions.clear();
 	}
 
 	return err;
@@ -431,6 +513,7 @@ static A_Err UpdateMenuHook(
 	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_init_js_bridge_cmd));
 	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_start_key_capture_cmd));
 	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_stop_key_capture_cmd));
+	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_update_key_binds_cmd));
 
 	return err;
 }
@@ -464,6 +547,8 @@ static A_Err CommandHook(
 				std::to_string(S_start_key_capture_cmd) + 
 				"," +
 				std::to_string(S_stop_key_capture_cmd) + 
+				"," +
+				std::to_string(S_update_key_binds_cmd) + 
 				")";
 
 			suites.UtilitySuite6()->AEGP_ExecuteScript(
@@ -484,6 +569,11 @@ static A_Err CommandHook(
 		else if (S_stop_key_capture_cmd == command)
 		{
 			S_is_creating_key_bind = false;
+			*handledPB = true;
+		}
+		else if (S_update_key_binds_cmd == command)
+		{
+			ReadKeyBindings();
 			*handledPB = true;
 		}
 	}
@@ -547,12 +637,13 @@ A_Err EntryPointFunc(
 	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_zoom_cmd));
 	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_init_js_bridge_cmd));
 	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_start_key_capture_cmd));
-	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_stop_key_capture_cmd));
+	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_update_key_binds_cmd));
 
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_zoom_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_init_js_bridge_cmd, "__zoom_save_cmd_ids__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_start_key_capture_cmd, "__zoom_start_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_stop_key_capture_cmd, "__zoom_stop_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
+	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_update_key_binds_cmd, "__zoom_update_key_binds__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
 
 	ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
 	ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(S_zoom_id, UpdateMenuHook, 0));
@@ -563,15 +654,13 @@ A_Err EntryPointFunc(
 	suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h);
 #endif
 
-	if (err)
-	{
-		ERR2(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "Could not register command hook."));
-	}
+	ReadKeyBindings();
 
     // Set the event callback for uiohook events.
     hook_set_dispatch_proc(&dispatch_proc, NULL);
 
-	S_mouse_events_thread = std::thread(MouseHookProc);
+	// Start hook thread
+	S_mouse_events_thread = std::thread(HookProc);
 
 	return err;
 }
