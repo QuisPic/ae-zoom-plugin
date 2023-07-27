@@ -6,7 +6,24 @@ cmake_minimum_required (VERSION 3.8)
 include(FetchContent)
 
 project ("ae-zoom")
+
 set( CMAKE_CXX_STANDARD 20 )
+
+# Fetch JSON library
+FetchContent_Declare(
+	json 
+	URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/json)
+
+# Fetch uiohook library
+FetchContent_Declare(
+	uiohook 
+	GIT_REPOSITORY https://github.com/kwhat/libuiohook.git
+	GIT_TAG 1.3
+	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/uiohook
+)
+
+FetchContent_MakeAvailable(json uiohook)
 
 add_subdirectory(extern)
 
@@ -23,26 +40,13 @@ endif()
 add_library(
 	${PROJECT_NAME}
 	MODULE
-	src/ae-zoom.cpp
-  "include/experimental.h" "src/experimental.cpp")
+	src/ae-zoom.cpp)
 
 target_include_directories(
 	${PROJECT_NAME}
 	PRIVATE
 	include
 )
-
-# Fetch JSON library
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz)
-FetchContent_MakeAvailable(json)
-
-# Fetch uiohook library
-FetchContent_Declare(
-	uiohook 
-	GIT_REPOSITORY https://github.com/kwhat/libuiohook.git
-	GIT_TAG 1.3
-)
-FetchContent_MakeAvailable(uiohook)
 
 if( WIN32 )
 	set(

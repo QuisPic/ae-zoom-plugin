@@ -21,6 +21,7 @@ static A_Err (*S_call_idle_routines)(void) = nullptr;
 
 static float								S_zoom_delta = 0.0f;
 static bool									S_is_creating_key_bind = false;
+static bool									S_js_bridge_created = false;
 static std::optional<KeyCodes>				S_key_codes_pass;
 static std::vector<KeyBindAction>			S_key_bindings;
 
@@ -33,7 +34,7 @@ static int									S_main_win_id = -1;
 static std::vector<LogMessage>				log_messages;
 static std::vector<KeyBindAction*>			S_zoom_actions;
 
-static std::thread							S_mouse_events_thread;
+static std::thread							S_uiohook_thread;
 static std::mutex							S_create_key_bind_mutex;
 static std::mutex							S_zoom_action_mutex;
 static std::mutex							S_log_mutex;
@@ -46,8 +47,8 @@ static std::string zoom_set_to_js = {
 	#include "JS/zoom-set-to.js"
 };
 
-static std::string save_cmd_ids_js = {
-	#include "JS/save-cmd-ids.js"
+static std::string init_js_bridge_js = {
+	#include "JS/init-js-bridge.js"
 };
 
 static std::string pass_key_bind_js = {
@@ -75,12 +76,102 @@ static void logger(unsigned int level, const char *format, ...) {
     va_end(args);
 }
 
+static void logger(unsigned int level, const std::string& format_str) {
+    switch (level) {
+        case LOG_LEVEL_INFO:
+            break;
+
+        case LOG_LEVEL_WARN:
+        case LOG_LEVEL_ERROR:
+			std::lock_guard lock(S_log_mutex);
+			log_messages.emplace_back(level, format_str);
+            break;
+    }
+}
+
+bool IsMainWindowEnabled()
+{
+#ifdef AE_OS_WIN
+	return IsWindowEnabled(S_main_win_h);
+#endif // AE_OS_WIN
+}
+
+std::tuple<A_Err, std::string> RunExtendscript(const std::string& script_str)
+{
+	A_Err err = A_Err_NONE;
+
+	/* After Effects can't execute script and displays an error if the main window is disabled */
+	if (!IsMainWindowEnabled())
+	{
+		return { err, "" };
+	}
+
+	AEGP_SuiteHandler suites(sP);
+	AEGP_MemHandle outResultH = nullptr;
+	AEGP_MemHandle outErrStringH = nullptr;
+
+	auto MemHandleToString = [&suites, &err](AEGP_MemHandle mH) -> std::string
+	{
+		void* memP = nullptr;
+
+		ERR(suites.MemorySuite1()->AEGP_LockMemHandle(mH, &memP));
+		std::string result_str = std::bit_cast<char*>(memP);
+		ERR(suites.MemorySuite1()->AEGP_UnlockMemHandle(mH));
+
+		return result_str;
+	};
+
+	ERR(suites.UtilitySuite6()->AEGP_ExecuteScript(
+		S_zoom_id,
+		script_str.c_str(),
+		false,
+		&outResultH,
+		&outErrStringH
+	));
+
+	std::string result_str = MemHandleToString(outResultH);
+	std::string error_str = MemHandleToString(outErrStringH);
+
+	if (!error_str.empty())
+	{
+		logger(LOG_LEVEL_ERROR, error_str);
+	}
+
+	return { err, result_str };
+}
+
+static A_Err InitJSBridge()
+{
+	A_Err err = A_Err_NONE;
+	AEGP_SuiteHandler	suites(sP);
+
+	std::string script_str = 
+		init_js_bridge_js + 
+		"(" + 
+		std::to_string(S_start_key_capture_cmd) + 
+		"," +
+		std::to_string(S_stop_key_capture_cmd) + 
+		"," +
+		std::to_string(S_update_key_binds_cmd) + 
+		")";
+
+	std::tie(err, std::ignore) = RunExtendscript(script_str);
+
+	if (!err)
+	{
+		S_js_bridge_created = true;
+	}
+
+	return err;
+}
+
 static A_Err ReadKeyBindings()
 {
 	A_Err err = A_Err_NONE;
 	AEGP_SuiteHandler	suites(sP);
 	AEGP_PersistentBlobH blobH;
 	A_char key_bindings_buf[2000];
+	A_Boolean key_exists = false;
 
 	if (S_key_bindings.size() > 0)
 	{
@@ -91,25 +182,34 @@ static A_Err ReadKeyBindings()
 
 	if (blobH)
 	{
-		ERR(suites.PersistentDataSuite4()->AEGP_GetString(
+		ERR(suites.PersistentDataSuite4()->AEGP_DoesKeyExist(
 			blobH,
 			SETTINGS_SECTION_NAME,
 			"keyBindings",
-			nullptr,
-			2000,
-			key_bindings_buf,
-			nullptr
-		));
+			&key_exists));
 
-		json key_bindings_json = json::parse(std::string(key_bindings_buf));
+		if (key_exists)
+		{
+			ERR(suites.PersistentDataSuite4()->AEGP_GetString(
+				blobH,
+				SETTINGS_SECTION_NAME,
+				"keyBindings",
+				nullptr,
+				2000,
+				key_bindings_buf,
+				nullptr
+			));
 
-		for (const auto& kbind_j : key_bindings_json) {
-			if (!kbind_j["enabled"])
-			{
-				continue;
+			json key_bindings_json = json::parse(std::string(key_bindings_buf));
+
+			for (const auto& kbind_j : key_bindings_json) {
+				if (!kbind_j["enabled"])
+				{
+					continue;
+				}
+
+				S_key_bindings.emplace_back(kbind_j.get<KeyBindAction>());
 			}
-
-			S_key_bindings.emplace_back(kbind_j.get<KeyBindAction>());
 		}
 	}
 
@@ -144,10 +244,23 @@ void GetMainMacWindowId()
 }
 #endif
 
+#ifdef AE_OS_WIN
+static bool IsSameProcessId(HWND hwnd0, HWND hwnd1)
+{
+	DWORD process_id_0;
+	GetWindowThreadProcessId(hwnd0, &process_id_0);
+	DWORD process_id_1;
+	GetWindowThreadProcessId(hwnd1, &process_id_1);
+
+	return process_id_0 == process_id_1;
+}
+#endif // AE_OS_WIN
+
+
 bool isMainWindowActive()
 {
 #ifdef AE_OS_WIN
-	return S_main_win_h == GetForegroundWindow();
+	return IsSameProcessId(S_main_win_h, GetForegroundWindow());
 #elif defined AE_OS_MAC
     if (S_main_win_id == -1)
     {
@@ -210,52 +323,10 @@ bool IsCursorOnMainWindow() {
     
     CFRelease(CFWinArray);
 #elif defined AE_OS_WIN
-	static auto isPointInsideWindow = [](HWND hwnd, POINT cursor_p, WIND_RECT rect_type) -> bool
-	{
-		RECT win_rect = { 0, 0, 0, 0 };
-
-		if (rect_type == WIND_RECT::FULL)
-		{
-			GetWindowRect(hwnd, &win_rect); // Get the area of the window
-		}
-		else if (rect_type == WIND_RECT::CLIENT)
-		{
-			ScreenToClient(hwnd, &cursor_p); // Convert the screen coordinates to client coordinates relative to the window
-			GetClientRect(hwnd, &win_rect); // Get the client area of the window
-		}
-
-		return PtInRect(&win_rect, cursor_p); // Check if the cursor is inside the area
-	};
-
     POINT cursor_pos;
     GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
 
-	/* Check if cursor is inside AE main window */
-	isOverWindow = isPointInsideWindow(S_main_win_h, cursor_pos, WIND_RECT::CLIENT);
-
-	/* If cursor is inside we need to check if it's over any window in front the main window*/
-	if (isOverWindow)
-	{
-		DWORD main_process_id;
-		GetWindowThreadProcessId(S_main_win_h, &main_process_id);
-		HWND front_hwnd = GetWindow(S_main_win_h, GW_HWNDPREV);
-
-		while (front_hwnd)
-		{
-			DWORD front_process_id;
-			GetWindowThreadProcessId(front_hwnd, &front_process_id);
-
-			if (IsWindowVisible(front_hwnd) && 
-				main_process_id != front_process_id &&
-				isPointInsideWindow(front_hwnd, cursor_pos, WIND_RECT::FULL))
-			{
-				isOverWindow = false;
-				break;
-			}
-
-			front_hwnd = GetWindow(front_hwnd, GW_HWNDPREV);
-		}
-	}
+	isOverWindow = IsSameProcessId(S_main_win_h, WindowFromPoint(cursor_pos));
 #endif
     
     return isOverWindow;
@@ -270,14 +341,15 @@ void dispatch_proc(uiohook_event * const event, void *user_data) {
 		event->type == EVENT_MOUSE_PRESSED
 	)
 	{
-		if (S_is_creating_key_bind)
+		if (S_is_creating_key_bind && isMainWindowActive())
 		{
 			if (event->type == EVENT_KEY_PRESSED)
 			{
 				if (event->data.keyboard.keycode == VC_ESCAPE)
 				{
-					// do not process Escape because Escape must close Key Capture window
-					return;
+					// stop event propagation for Escape because it must close the Key Capture window
+					// and it may accidentally stop extendscript execution
+					event->reserved = 0x1;
 				}
 				else if (last_key_code == event->data.keyboard.keycode)
 				{
@@ -292,13 +364,11 @@ void dispatch_proc(uiohook_event * const event, void *user_data) {
 			const std::lock_guard lock(S_create_key_bind_mutex);
 			S_key_codes_pass.emplace(event);
 
-			// event->reserved = 0x1; // stop event propagation
-
 			S_call_idle_routines();
 		}
-		else if ((event->type == EVENT_KEY_PRESSED && isMainWindowActive()) ||
-				((event->type == EVENT_MOUSE_PRESSED || 
-				event->type == EVENT_MOUSE_WHEEL) && IsCursorOnMainWindow()))
+		else if (((event->type == EVENT_KEY_PRESSED && isMainWindowActive()) ||
+				((event->type == EVENT_MOUSE_PRESSED || event->type == EVENT_MOUSE_WHEEL) && 
+					IsCursorOnMainWindow())))
 		{
 			KeyCodes current_key_codes(event);
 			bool key_bind_found = false;
@@ -423,24 +493,43 @@ static	A_Err	IdleHook(
 {
 	A_Err err = A_Err_NONE;
 
+	/* Displaying errors and warnings from uiohook */
 	if (log_messages.size() > 0)
 	{
 		AEGP_SuiteHandler	suites(sP);
+		std::lock_guard lock(S_log_mutex);
 
-		for (auto it = log_messages.begin(); it != log_messages.end();)
+		for (const auto& msg : log_messages)
 		{
-			ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, it->format));
+			ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg.format));
+		}
 
-			std::lock_guard lock(S_log_mutex);
-			it = log_messages.erase(log_messages.begin());
+		log_messages.clear();
+	}
+
+	/* Init JS bridge */
+	if (!S_js_bridge_created)
+	{
+		AEGP_SuiteHandler	suites(sP);
+		A_Boolean scripting_is_available = false;
+
+		ERR(suites.UtilitySuite6()->AEGP_IsScriptingAvailable(&scripting_is_available));
+
+		if (scripting_is_available)
+		{
+			ERR(InitJSBridge());
 		}
 	}
 
+	/* Passing key presses to the script panel */
 	if (S_is_creating_key_bind && S_key_codes_pass) {
 		AEGP_SuiteHandler	suites(sP);
-		KeyCodes& keyCodes = S_key_codes_pass.value();
+		KeyCodes keyCodes = S_key_codes_pass.value();
 
-		std::string pass_fn_str =
+		const std::lock_guard lock(S_create_key_bind_mutex);
+		S_key_codes_pass.reset();
+
+		std::string pass_fn_script =
 			pass_key_bind_js +
 			"(" +
 			std::to_string(keyCodes.type) +
@@ -450,18 +539,10 @@ static	A_Err	IdleHook(
 			std::to_string(keyCodes.keycode) +
 			")";
 
-		ERR(suites.UtilitySuite6()->AEGP_ExecuteScript(
-			S_zoom_id,
-			pass_fn_str.c_str(),
-			false,
-			nullptr,
-			nullptr
-		));
-
-		const std::lock_guard lock(S_create_key_bind_mutex);
-		S_key_codes_pass.reset();
+		std::tie(err, std::ignore) = RunExtendscript(pass_fn_script);
 	}
 
+	/* Changing zoom on key presses */
 	if (S_zoom_actions.size() > 0) 
 	{
 		AEGP_SuiteHandler	suites(sP);
@@ -486,13 +567,7 @@ static	A_Err	IdleHook(
 				break;
 			}
 
-			ERR(suites.UtilitySuite6()->AEGP_ExecuteScript(
-				S_zoom_id,
-				script_str.c_str(),
-				false,
-				nullptr,
-				nullptr
-			));
+			std::tie(err, std::ignore) = RunExtendscript(script_str);
 		}
 
 		S_zoom_actions.clear();
@@ -541,24 +616,7 @@ static A_Err CommandHook(
 		}
 		else if (S_init_js_bridge_cmd == command)
 		{
-			std::string script_str = 
-				save_cmd_ids_js + 
-				"(" + 
-				std::to_string(S_start_key_capture_cmd) + 
-				"," +
-				std::to_string(S_stop_key_capture_cmd) + 
-				"," +
-				std::to_string(S_update_key_binds_cmd) + 
-				")";
-
-			suites.UtilitySuite6()->AEGP_ExecuteScript(
-				S_zoom_id,
-				script_str.c_str(),
-				false,
-				nullptr,
-				nullptr
-			);
-
+			ERR(InitJSBridge());
 			*handledPB = TRUE;
 		}
 		else if (S_start_key_capture_cmd == command)
@@ -573,7 +631,7 @@ static A_Err CommandHook(
 		}
 		else if (S_update_key_binds_cmd == command)
 		{
-			ReadKeyBindings();
+			ERR(ReadKeyBindings());
 			*handledPB = true;
 		}
 	}
@@ -611,9 +669,9 @@ static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP, AEGP_DeathRefcon refcon
 			break;
 	}
 
-	if (S_mouse_events_thread.joinable())
+	if (S_uiohook_thread.joinable())
 	{
-		S_mouse_events_thread.join();
+		S_uiohook_thread.join();
 	}
 
 	return A_Err_NONE;
@@ -640,7 +698,7 @@ A_Err EntryPointFunc(
 	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_update_key_binds_cmd));
 
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_zoom_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
-	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_init_js_bridge_cmd, "__zoom_save_cmd_ids__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
+	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_init_js_bridge_cmd, "__zoom_init_js_bridge__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_start_key_capture_cmd, "__zoom_start_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_stop_key_capture_cmd, "__zoom_stop_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
 	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_update_key_binds_cmd, "__zoom_update_key_binds__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
@@ -650,17 +708,19 @@ A_Err EntryPointFunc(
 	ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
 	ERR(suites.RegisterSuite5()->AEGP_RegisterDeathHook(S_zoom_id, DeathHook, 0));
 
+	ERR(suites.MemorySuite1()->AEGP_SetMemReportingOn(true));
+
 #ifdef AE_OS_WIN
-	suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h);
+	ERR(suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h));
 #endif
 
-	ReadKeyBindings();
+	ERR(ReadKeyBindings());
 
     // Set the event callback for uiohook events.
     hook_set_dispatch_proc(&dispatch_proc, NULL);
 
 	// Start hook thread
-	S_mouse_events_thread = std::thread(HookProc);
+	S_uiohook_thread = std::thread(HookProc);
 
 	return err;
 }

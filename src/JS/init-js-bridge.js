@@ -3,5 +3,5 @@ STR((function (startKeyCaptureCmdId, endKeyCaptureCmdId, updateKeyBindsCmdId) {
         startKeyCaptureCmdId: startKeyCaptureCmdId,
         stopKeyCaptureCmdId: endKeyCaptureCmdId,
         updateKeyBindsCmdId: updateKeyBindsCmdId,
-    }
+    };
 }))

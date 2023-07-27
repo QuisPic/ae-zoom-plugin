@@ -7,6 +7,7 @@
 #include <optional>
 #include <memory>
 #include <vector>
+#include <tuple>
 
 #include "AEConfig.h"
 #ifdef AE_OS_WIN
