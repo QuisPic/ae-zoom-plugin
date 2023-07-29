@@ -21,7 +21,7 @@ static A_Err (*S_call_idle_routines)(void) = nullptr;
 
 static float								S_zoom_delta = 0.0f;
 static bool									S_is_creating_key_bind = false;
-static bool									S_js_bridge_created = false;
+//static bool									S_js_bridge_created = false;
 static std::optional<KeyCodes>				S_key_codes_pass;
 static std::vector<KeyBindAction>			S_key_bindings;
 
@@ -93,7 +93,9 @@ bool IsMainWindowEnabled()
 {
 #ifdef AE_OS_WIN
 	return IsWindowEnabled(S_main_win_h);
-#endif // AE_OS_WIN
+#elif defined AE_OS_MAC
+	return true;
+#endif
 }
 
 std::tuple<A_Err, std::string> RunExtendscript(const std::string& script_str)
@@ -140,30 +142,30 @@ std::tuple<A_Err, std::string> RunExtendscript(const std::string& script_str)
 	return { err, result_str };
 }
 
-static A_Err InitJSBridge()
-{
-	A_Err err = A_Err_NONE;
-	AEGP_SuiteHandler	suites(sP);
-
-	std::string script_str = 
-		init_js_bridge_js + 
-		"(" + 
-		std::to_string(S_start_key_capture_cmd) + 
-		"," +
-		std::to_string(S_stop_key_capture_cmd) + 
-		"," +
-		std::to_string(S_update_key_binds_cmd) + 
-		")";
-
-	std::tie(err, std::ignore) = RunExtendscript(script_str);
-
-	if (!err)
-	{
-		S_js_bridge_created = true;
-	}
-
-	return err;
-}
+//static A_Err InitJSBridge()
+//{
+//	A_Err err = A_Err_NONE;
+//	AEGP_SuiteHandler	suites(sP);
+//
+//	std::string script_str = 
+//		init_js_bridge_js + 
+//		"(" + 
+//		std::to_string(S_start_key_capture_cmd) + 
+//		"," +
+//		std::to_string(S_stop_key_capture_cmd) + 
+//		"," +
+//		std::to_string(S_update_key_binds_cmd) + 
+//		")";
+//
+//	std::tie(err, std::ignore) = RunExtendscript(script_str);
+//
+//	if (!err)
+//	{
+//		S_js_bridge_created = true;
+//	}
+//
+//	return err;
+//}
 
 static A_Err ReadKeyBindings()
 {
@@ -216,26 +218,47 @@ static A_Err ReadKeyBindings()
 	return err;
 }
 
+static bool IsSameProcessId(
+#ifdef AE_OS_WIN
+	HWND hwnd0,
+	HWND hwnd1
+#elif defined AE_OS_MAC
+	CFDictionaryRef winDict
+#endif
+)
+{
+#ifdef AE_OS_WIN
+	DWORD process_id_0;
+	GetWindowThreadProcessId(hwnd0, &process_id_0);
+	DWORD process_id_1;
+	GetWindowThreadProcessId(hwnd1, &process_id_1);
+
+	return process_id_0 == process_id_1;
+#elif defined AE_OS_MAC
+	int pid = getpid(); // Get the PID of the current process
+
+	CFNumberRef windowPID = (CFNumberRef)CFDictionaryGetValue(winDict, kCGWindowOwnerPID);
+	int windowPIDValue;
+	CFNumberGetValue(windowPID, kCFNumberIntType, &windowPIDValue);
+
+	return windowPIDValue == pid;
+#endif
+}
+
 #ifdef AE_OS_MAC
 void GetMainMacWindowId()
 {
     // Get the list of all windows
     CFArrayRef windowList = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
 
-    // Get the PID of the current process
-    int pid = getpid();
-
     // Iterate through the windows to find the one that belongs to the current process
     for (int i = 0; i < CFArrayGetCount(windowList); i++) {
-        CFDictionaryRef window = (CFDictionaryRef)CFArrayGetValueAtIndex(windowList, i);
-        CFNumberRef windowPID = (CFNumberRef)CFDictionaryGetValue(window, kCGWindowOwnerPID);
+        CFDictionaryRef winDict = (CFDictionaryRef)CFArrayGetValueAtIndex(windowList, i);
 
-        int windowPIDValue;
-        CFNumberGetValue(windowPID, kCFNumberIntType, &windowPIDValue);
-
-        if (windowPIDValue == pid) {
-            CFNumberRef winID = (CFNumberRef)CFDictionaryGetValue(window, kCGWindowNumber);
+        if (IsSameProcessId(winDict)) {
+            CFNumberRef winID = (CFNumberRef)CFDictionaryGetValue(winDict, kCGWindowNumber);
             CFNumberGetValue(winID, kCFNumberIntType, &S_main_win_id);
+
             break;
         }
     }
@@ -243,19 +266,6 @@ void GetMainMacWindowId()
     CFRelease(windowList);
 }
 #endif
-
-#ifdef AE_OS_WIN
-static bool IsSameProcessId(HWND hwnd0, HWND hwnd1)
-{
-	DWORD process_id_0;
-	GetWindowThreadProcessId(hwnd0, &process_id_0);
-	DWORD process_id_1;
-	GetWindowThreadProcessId(hwnd1, &process_id_1);
-
-	return process_id_0 == process_id_1;
-}
-#endif // AE_OS_WIN
-
 
 bool isMainWindowActive()
 {
@@ -272,8 +282,7 @@ bool isMainWindowActive()
 		kCGNullWindowID
 	);
 
-	CFIndex i, n;
-	for (i = 0, n = CFArrayGetCount(windowArray); i < n; i++) {
+	for (CFIndex i = 0, n = CFArrayGetCount(windowArray); i < n; i++) {
 		int layer, id;
 		CFDictionaryRef windict = (CFDictionaryRef)CFArrayGetValueAtIndex(windowArray, i);
 		CFNumberRef layernum = (CFNumberRef)CFDictionaryGetValue(windict, kCGWindowLayer);
@@ -282,10 +291,11 @@ bool isMainWindowActive()
 			CFNumberGetValue(layernum, kCFNumberIntType, &layer);
 
 			if (layer == 0) {
-				CFNumberRef winnum = (CFNumberRef)CFDictionaryGetValue(windict, kCGWindowNumber);
-				CFNumberGetValue(winnum, kCFNumberIntType, &id);
+				// CFNumberRef winnum = (CFNumberRef)CFDictionaryGetValue(windict, kCGWindowNumber);
+				// CFNumberGetValue(winnum, kCFNumberIntType, &id);
 
-				return id == S_main_win_id;
+				return IsSameProcessId(windict);
+				// return id == S_main_win_id;
 			}
 		}
 	}
@@ -296,32 +306,39 @@ bool isMainWindowActive()
 
 bool IsCursorOnMainWindow() {
     bool isOverWindow = false;
+
 #ifdef AE_OS_MAC
     if (S_main_win_id == -1)
     {
         GetMainMacWindowId();
     }
+
+	// Get the cursor position
+	CGEventRef event = CGEventCreate(NULL);
+	CGPoint cursorPosition = CGEventGetLocation(event);
+	CFRelease(event);
     
-    // Get the window's frame
-    CFArrayRef CFWinArray = CGWindowListCopyWindowInfo(kCGWindowListOptionIncludingWindow, S_main_win_id);
-    
-    if (CFArrayGetCount(CFWinArray) > 0)
-    {
-        CFDictionaryRef main_win = (CFDictionaryRef)CFArrayGetValueAtIndex(CFWinArray, 0);
-        CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(main_win, kCGWindowBounds);
+    CFArrayRef winList = CGWindowListCopyWindowInfo(
+		kCGWindowListExcludeDesktopElements |
+		kCGWindowListOptionIncludingWindow  |
+		kCGWindowListOptionOnScreenAboveWindow,
+		S_main_win_id);
+
+	for (CFIndex i = 0, n = CFArrayGetCount(winList); i < n; i++) {
+        CFDictionaryRef winDict = (CFDictionaryRef)CFArrayGetValueAtIndex(winList, i);
+        CFDictionaryRef bounds = (CFDictionaryRef)CFDictionaryGetValue(winDict, kCGWindowBounds);
         CGRect windowFrame;
         CGRectMakeWithDictionaryRepresentation(bounds, &windowFrame);
         
-        // Get the cursor position
-        CGEventRef event = CGEventCreate(NULL);
-        CGPoint cursorPosition = CGEventGetLocation(event);
-        CFRelease(event);
-
         // Check if the cursor is over the window's frame
-        isOverWindow = CGRectContainsPoint(windowFrame, cursorPosition);
-    }
+		if (CGRectContainsPoint(windowFrame, cursorPosition))
+		{
+			isOverWindow = IsSameProcessId(winDict);
+			break;
+		}
+	}
     
-    CFRelease(CFWinArray);
+    CFRelease(winList);
 #elif defined AE_OS_WIN
     POINT cursor_pos;
     GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
@@ -507,19 +524,19 @@ static	A_Err	IdleHook(
 		log_messages.clear();
 	}
 
-	/* Init JS bridge */
-	if (!S_js_bridge_created)
-	{
-		AEGP_SuiteHandler	suites(sP);
-		A_Boolean scripting_is_available = false;
+	///* Init JS bridge */
+	//if (!S_js_bridge_created)
+	//{
+	//	AEGP_SuiteHandler	suites(sP);
+	//	A_Boolean scripting_is_available = false;
 
-		ERR(suites.UtilitySuite6()->AEGP_IsScriptingAvailable(&scripting_is_available));
+	//	ERR(suites.UtilitySuite6()->AEGP_IsScriptingAvailable(&scripting_is_available));
 
-		if (scripting_is_available)
-		{
-			ERR(InitJSBridge());
-		}
-	}
+	//	if (scripting_is_available)
+	//	{
+	//		ERR(InitJSBridge());
+	//	}
+	//}
 
 	/* Passing key presses to the script panel */
 	if (S_is_creating_key_bind && S_key_codes_pass) {
@@ -576,73 +593,74 @@ static	A_Err	IdleHook(
 	return err;
 }
 
-static A_Err UpdateMenuHook(
-	AEGP_GlobalRefcon		plugin_refconPV,	/* >> */
-	AEGP_UpdateMenuRefcon	refconPV,			/* >> */
-	AEGP_WindowType			active_window)		/* >> */
-{
-	A_Err 				err = A_Err_NONE;
-	AEGP_SuiteHandler	suites(sP);
-
-	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_zoom_cmd));
-	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_init_js_bridge_cmd));
-	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_start_key_capture_cmd));
-	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_stop_key_capture_cmd));
-	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_update_key_binds_cmd));
-
-	return err;
-}
-
-static A_Err CommandHook(
-	AEGP_GlobalRefcon	plugin_refconPV,		/* >> */
-	AEGP_CommandRefcon	refconPV,				/* >> */
-	AEGP_Command		command,				/* >> */
-	AEGP_HookPriority	hook_priority,			/* >> */
-	A_Boolean			already_handledB,		/* >> */
-	A_Boolean*			handledPB)				/* << */
-{
-	A_Err err = A_Err_NONE;
-	AEGP_SuiteHandler	suites(sP);
-
-	if (already_handledB)
-	{
-		return err;
-	}
-
-	try {
-		if (S_zoom_cmd == command) {
-//			HackBipBop();
-			*handledPB = TRUE;
-		}
-		else if (S_init_js_bridge_cmd == command)
-		{
-			ERR(InitJSBridge());
-			*handledPB = TRUE;
-		}
-		else if (S_start_key_capture_cmd == command)
-		{
-			S_is_creating_key_bind = true;
-			*handledPB = true;
-		}
-		else if (S_stop_key_capture_cmd == command)
-		{
-			S_is_creating_key_bind = false;
-			*handledPB = true;
-		}
-		else if (S_update_key_binds_cmd == command)
-		{
-			ERR(ReadKeyBindings());
-			*handledPB = true;
-		}
-	}
-	catch (A_Err& thrown_err) 
-	{
-		err = thrown_err;
-	}
-
-	return err;
-}
-
+//static A_Err UpdateMenuHook(
+//	AEGP_GlobalRefcon		plugin_refconPV,	/* >> */
+//	AEGP_UpdateMenuRefcon	refconPV,			/* >> */
+//	AEGP_WindowType			active_window)		/* >> */
+//{
+//	A_Err 				err = A_Err_NONE;
+//	AEGP_SuiteHandler	suites(sP);
+//
+//	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_zoom_cmd));
+//	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_init_js_bridge_cmd));
+//	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_start_key_capture_cmd));
+//	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_stop_key_capture_cmd));
+//	ERR(suites.CommandSuite1()->AEGP_EnableCommand(S_update_key_binds_cmd));
+//
+//	return err;
+//}
+//
+//static A_Err CommandHook(
+//	AEGP_GlobalRefcon	plugin_refconPV,		/* >> */
+//	AEGP_CommandRefcon	refconPV,				/* >> */
+//	AEGP_Command		command,				/* >> */
+//	AEGP_HookPriority	hook_priority,			/* >> */
+//	A_Boolean			already_handledB,		/* >> */
+//	A_Boolean*			handledPB)				/* << */
+//{
+//	A_Err err = A_Err_NONE;
+//	AEGP_SuiteHandler	suites(sP);
+//
+//	if (already_handledB)
+//	{
+//		return err;
+//	}
+//
+//	try {
+//		if (S_zoom_cmd == command) {
+////			HackBipBop();
+//			*handledPB = TRUE;
+//		}
+//		else if (S_init_js_bridge_cmd == command)
+//		{
+//			ERR(InitJSBridge());
+//			*handledPB = TRUE;
+//		}
+//		else if (S_start_key_capture_cmd == command)
+//		{
+//			S_is_creating_key_bind = true;
+//			*handledPB = true;
+//		}
+//		else if (S_stop_key_capture_cmd == command)
+//		{
+//			S_is_creating_key_bind = false;
+//			S_key_codes_pass.reset();
+//			*handledPB = true;
+//		}
+//		else if (S_update_key_binds_cmd == command)
+//		{
+//			ERR(ReadKeyBindings());
+//			*handledPB = true;
+//		}
+//	}
+//	catch (A_Err& thrown_err) 
+//	{
+//		err = thrown_err;
+//	}
+//
+//	return err;
+//}
+//
 
 static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP, AEGP_DeathRefcon refconP)
 {
@@ -692,19 +710,19 @@ A_Err EntryPointFunc(
 	A_Err err = A_Err_NONE;
 	A_Err err2 = A_Err_NONE;
     
-	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_zoom_cmd));
-	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_init_js_bridge_cmd));
-	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_start_key_capture_cmd));
-	ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_update_key_binds_cmd));
+	//ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_zoom_cmd));
+	//ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_init_js_bridge_cmd));
+	//ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_start_key_capture_cmd));
+	//ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&S_update_key_binds_cmd));
 
-	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_zoom_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
-	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_init_js_bridge_cmd, "__zoom_init_js_bridge__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
-	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_start_key_capture_cmd, "__zoom_start_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
-	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_stop_key_capture_cmd, "__zoom_stop_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
-	ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_update_key_binds_cmd, "__zoom_update_key_binds__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
+	//ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_zoom_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
+	//ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_init_js_bridge_cmd, "__zoom_init_js_bridge__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
+	//ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_start_key_capture_cmd, "__zoom_start_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
+	//ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_stop_key_capture_cmd, "__zoom_stop_key_capture__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
+	//ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(S_update_key_binds_cmd, "__zoom_update_key_binds__", AEGP_Menu_NONE, AEGP_MENU_INSERT_SORTED));
 
-	ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
-	ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(S_zoom_id, UpdateMenuHook, 0));
+	//ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
+	//ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(S_zoom_id, UpdateMenuHook, 0));
 	ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
 	ERR(suites.RegisterSuite5()->AEGP_RegisterDeathHook(S_zoom_id, DeathHook, 0));
 
@@ -723,4 +741,78 @@ A_Err EntryPointFunc(
 	S_uiohook_thread = std::thread(HookProc);
 
 	return err;
+}
+
+/**
+* \brief Free any string memory which has been returned as function result.
+*
+* \param *p Pointer to the string
+*/
+extern "C" DllExport void ESFreeMem(void* p)
+{
+	delete(char*)(p);
+}
+
+/**
+* \brief Returns the version number of the library
+*
+* ExtendScript publishes this number as the version property of the object
+* created by new ExternalObject.
+*/
+extern "C" DllExport long ESGetVersion()
+{
+	return 0x1;
+}
+
+/**
+* \brief Initialize the library and return function signatures.
+*
+* These signatures have no effect on the arguments that can be passed to the functions.
+* They are used by JavaScript to cast the arguments, and to populate the
+* reflection interface.
+*/
+extern "C" DllExport char* ESInitialize(const TaggedData * *argv, long argc)
+{
+	return nullptr;
+}
+
+/**
+* \brief Terminate the library.
+*
+* Does any necessary clean up that is needed.
+*/
+extern "C" DllExport void ESTerminate()
+{}
+
+/* This function is called from the script panel */
+extern "C" DllExport long isAvailableFn(TaggedData* argv, long argc, TaggedData* retval)
+{
+	// return true
+	retval->type = kTypeBool;
+	retval->data.intval = 1;
+
+	return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long updateKeyBindings(TaggedData* argv, long argc, TaggedData* retval)
+{
+	ReadKeyBindings();
+	return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long startKeyCapture(TaggedData* argv, long argc, TaggedData* retval)
+{
+	S_is_creating_key_bind = true;
+	return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long endKeyCapture(TaggedData* argv, long argc, TaggedData* retval)
+{
+	S_is_creating_key_bind = false;
+	S_key_codes_pass.reset();
+
+	return kESErrOK;
 }

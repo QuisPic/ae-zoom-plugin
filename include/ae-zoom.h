@@ -20,6 +20,9 @@
 #include "AEGP_SuiteHandler.h"
 #include "Strings.h"
 
+#include "ExternalObject/SoCClient.h"
+#include "ExternalObject/SoSharedLibDefs.h"
+
 #include <uiohook.h>
 #include <nlohmann/json.hpp>
 
