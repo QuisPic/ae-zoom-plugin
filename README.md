@@ -6,24 +6,48 @@ This plug-in is supposed to be used together with [Zoom](https://github.com/Quis
 * [Cmake 3.8.0+](https://www.cmake.org/download/)
 ## Building
 Clone the repository:
-`git clone git@github.com:QuisPic/ae-zoom-plugin.git`
+`git clone https://github.com/QuisPic/ae-zoom-plugin.git`
+
+### Windows
 #### CMake
 Open the repository folder in terminal and run:
 ```
 cmake -S . -B build
-cmake --build build
+cmake --build build --config Debug
 ```
-To build a release version replace the last command with:
+To build release version run:
 ```
+cmake -S . -B build
 cmake --build build --config Release
 ```
-After that the plugin can be found in `./build/Debug/Zoom.aex` or `./build/Release/Zoom.aex`
-#### Visual Studio on Windows
+After that the plug-in can be found in `./build/Debug/Zoom.aex` or `./build/Release/Zoom.aex`
+#### Visual Studio
 Open `CMakeLists.txt` using Visual Studio's [built-in support for opening CMake projects](https://blogs.msdn.microsoft.com/vcblog/2016/10/05/cmake-support-in-visual-studio/) and build.
-#### Xcode
+
+### macOS
+#### CMake
+Open the repository folder in terminal and run:
+```
+cmake -S . -B build -D CMAKE_BUILD_TYPE=Debug
+cmake --build build
+```
+To build release version run:
+```
+cmake -S . -B build -D CMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+After that the plug-in can be found in `./build/Zoom.plugin`
+#### XCode
 Generate XCode project via Terminal using CMake
 ```
 mkdir build
 cd build
 cmake -GXcode ..
 ```
+
+## Installation
+Copy the plug-in to:
+
+Windows: `C:\Program Files\Adobe\Adobe After Effects [version]\Support Files\Plug-ins\`
+
+macOS: `/Applications/Adobe After Effects (version)/Plug-ins/`
