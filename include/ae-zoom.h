@@ -85,6 +85,27 @@ public:
 		type = e->type;
 		mask = e->mask;
 
+		// make the mask accept both left and right buttons
+		if (mask & (MASK_CTRL))
+		{
+			mask |= MASK_CTRL;
+		}
+
+		if (mask & (MASK_META))
+		{
+			mask |= MASK_META;
+		}
+
+		if (mask & (MASK_SHIFT))
+		{
+			mask |= MASK_SHIFT;
+		}
+
+		if (mask & (MASK_ALT))
+		{
+			mask |= MASK_ALT;
+		}
+
 		switch (e->type)
 		{
 		case EVENT_KEY_PRESSED:
@@ -104,7 +125,10 @@ public:
 		}
 	}
 
-	auto operator<=>(const KeyCodes&) const = default;
+	bool operator==(const KeyCodes& other) const
+	{
+		return type == other.type && (mask == other.mask || (mask & other.mask)) && keycode == other.keycode;
+	}
 };
 
 class KeyBindAction

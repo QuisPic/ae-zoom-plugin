@@ -2,12 +2,20 @@
 # project specific logic here.
 #
 cmake_minimum_required (VERSION 3.8)
-
+set( CMAKE_CXX_STANDARD 20 )
 include(FetchContent)
 
-project ("ae-zoom")
+if( APPLE )
+	# Create Universal Binary
+	set( CMAKE_OSX_ARCHITECTURES "arm64;x86_64" )
 
-set( CMAKE_CXX_STANDARD 20 )
+	# Disable warnings
+	add_compile_options(
+		-Wno-pragma-pack
+	)
+endif()
+
+project ("Zoom")
 
 # Fetch JSON library
 FetchContent_Declare(
@@ -26,16 +34,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(json uiohook)
 
 add_subdirectory(extern)
-
-if( APPLE )
-	# Create Universal Binary
-	#set( CMAKE_OSX_ARCHITECTURES "arm64;x86_64" )
-
-	# Disable warnings
-	add_compile_options(
-		-Wno-pragma-pack
-	)
-endif()
 
 add_library(
 	${PROJECT_NAME}
