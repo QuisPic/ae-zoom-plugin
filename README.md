@@ -1,7 +1,9 @@
 # Zoom Plug-in for After Effects
-Source code for the After Effects plug-in that comes with [Zoom](https://github.com/QuisPic/ae-zoom) script for Ae. The plug-in adds support for custom key bindings that can change zoom value of the active viewer inside After Effects.
+After Effects plug-in that comes with [Zoom](https://github.com/QuisPic/ae-zoom) script for Ae. The plug-in adds support for custom key bindings that can change zoom value of the active viewer.
+
 ## Please note
-This plug-in is supposed to be used together with [Zoom](https://github.com/QuisPic/ae-zoom) script. You can add key bindings only using the script. The plug-in only reads existing key bindings that were added through the script.
+This plugin is intended to be used together with [Zoom](https://github.com/QuisPic/ae-zoom) script. You can add key bindings only using the script. The plugin will only read existing key bindings added by the script.
+
 ## Dependencies
 * [Cmake 3.8.0+](https://www.cmake.org/download/)
 ## Building
