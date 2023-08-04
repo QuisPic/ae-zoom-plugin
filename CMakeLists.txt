@@ -7,7 +7,7 @@ include(FetchContent)
 
 if( APPLE )
 	# Create Universal Binary
-	set( CMAKE_OSX_ARCHITECTURES "arm64;x86_64" )
+	set( CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "" FORCE)
 
 	# Disable warnings
 	add_compile_options(
