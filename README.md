@@ -48,6 +48,10 @@ cmake -GXcode ..
 ```
 
 ## Installation
+### Via [Zoom script](https://github.com/QuisPic/ae-zoom)
+Download the release version of the script and run it in After Effects. In the script panel, click Settings (⋮) -> "Key Bindings...". A new window will pop up, follow the installation instructions at the top of the window.
+
+### Manually 
 Copy the plug-in file to:
 
 Windows: `C:\Program Files\Adobe\Adobe After Effects [version]\Support Files\Plug-ins\`
