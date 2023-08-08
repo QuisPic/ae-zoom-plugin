@@ -13,7 +13,11 @@ static SPBasicSuite*						sP = NULL;
 
 static A_Err (*S_call_idle_routines)(void) = nullptr;
 
-static bool									S_is_creating_key_bind = false;
+static std::atomic<bool>					S_is_creating_key_bind = false;
+static std::atomic<bool>					S_logging_enabled = true;
+static std::shared_future<ZOOM_STATUS>		S_zoom_status_future;
+static std::optional<ZOOM_STATUS>			S_zoom_status;
+static std::shared_future<int>				S_iohook_future;
 static std::optional<KeyCodes>				S_key_codes_pass;
 static std::vector<KeyBindAction>			S_key_bindings;
 
@@ -24,7 +28,6 @@ static HWND									S_main_win_h = nullptr;
 static std::vector<LogMessage>				log_messages;
 static std::vector<KeyBindAction*>			S_zoom_actions;
 
-static std::thread							S_uiohook_thread;
 static std::mutex							S_create_key_bind_mutex;
 static std::mutex							S_zoom_action_mutex;
 static std::mutex							S_log_mutex;
@@ -41,7 +44,33 @@ static std::string pass_key_bind_js = {
 	#include "JS/pass-key-bind.js"
 };
 
-static void logger_proc(unsigned int level, void *user_data, const char *format, va_list args) {
+/**
+* \brief Utility function to handle strings and memory clean up
+*
+* \param s - The referenced string
+*/
+static char* getNewBuffer(std::string& s)
+{
+	// Dynamically allocate memory buffer to hold the string 
+	// to pass back to JavaScript
+	char* buff = new char[1 + s.length()];
+
+	memset(buff, 0, s.length() + 1);
+	strcpy(buff, s.c_str());
+
+	return buff;
+}
+
+
+static void logger(
+	unsigned int level, 
+	std::tuple<std::string, std::string> strings
+) {
+	if (!S_logging_enabled)
+	{
+		return;
+	};
+
     switch (level) {
         case LOG_LEVEL_INFO:
             break;
@@ -49,20 +78,21 @@ static void logger_proc(unsigned int level, void *user_data, const char *format,
         case LOG_LEVEL_WARN:
         case LOG_LEVEL_ERROR:
 			std::lock_guard lock(S_log_mutex);
-			log_messages.push_back({ level, format });
+			log_messages.emplace_back(level, std::get<0>(strings), std::get<1>(strings));
             break;
     }
 }
 
-static void logger(unsigned int level, const char *format, ...) {
-    va_list args;
+static void logger(
+	unsigned int level, 
+	const std::string& format_str,
+	const std::string& instructions_str
+) {
+	if (!S_logging_enabled)
+	{
+		return;
+	};
 
-    va_start(args, format);
-    logger_proc(level, NULL, format, args);
-    va_end(args);
-}
-
-static void logger(unsigned int level, const std::string& format_str) {
     switch (level) {
         case LOG_LEVEL_INFO:
             break;
@@ -70,7 +100,7 @@ static void logger(unsigned int level, const std::string& format_str) {
         case LOG_LEVEL_WARN:
         case LOG_LEVEL_ERROR:
 			std::lock_guard lock(S_log_mutex);
-			log_messages.emplace_back(level, format_str);
+			log_messages.emplace_back(level, format_str, instructions_str);
             break;
     }
 }
@@ -122,7 +152,7 @@ std::tuple<A_Err, std::string> RunExtendscript(const std::string& script_str)
 
 	if (!error_str.empty())
 	{
-		logger(LOG_LEVEL_ERROR, error_str);
+		logger(LOG_LEVEL_ERROR, error_str, "");
 	}
 
 	return { err, result_str };
@@ -273,7 +303,12 @@ bool IsCursorOnMainWindow() {
 void dispatch_proc(uiohook_event * const event, void *user_data) {
 	static uint16_t last_key_code = VC_UNDEFINED;
 
-	if (
+	if (event->type == EVENT_HOOK_ENABLED)
+	{
+		auto zoom_status_promise = std::bit_cast<std::promise<ZOOM_STATUS>*>(user_data);
+		zoom_status_promise->set_value(ZOOM_STATUS::INITIALIZED);
+	}
+	else if (
 		event->type == EVENT_KEY_PRESSED ||
 		event->type == EVENT_MOUSE_WHEEL ||
 		event->type == EVENT_MOUSE_PRESSED
@@ -349,79 +384,111 @@ void dispatch_proc(uiohook_event * const event, void *user_data) {
 	}
 }
 
-int HookProc() {
-    // Start the hook and block.
-    // NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
-    int status = hook_run();
+std::tuple<std::string, std::string> GetHookErrorStrings(int status)
+{
+	std::tuple<std::string, std::string> result;
 
-    switch (status) {
-        case UIOHOOK_SUCCESS:
-            // Everything is ok.
+	if (status == UIOHOOK_SUCCESS)
+	{
+		return result;
+	}
+
+	switch (status) {
+		// System level errors.
+		case UIOHOOK_ERROR_OUT_OF_MEMORY:
+			result = { "Failed to allocate memory.", "" };
             break;
-
-        // System level errors.
-        case UIOHOOK_ERROR_OUT_OF_MEMORY:
-            logger(LOG_LEVEL_ERROR, "Failed to allocate memory. (%#X)", status);
-            break;
-
 
         // X11 specific errors.
         case UIOHOOK_ERROR_X_OPEN_DISPLAY:
-            logger(LOG_LEVEL_ERROR, "Failed to open X11 display. (%#X)", status);
+			result = { "Failed to open X11 display.", "" };
             break;
 
         case UIOHOOK_ERROR_X_RECORD_NOT_FOUND:
-            logger(LOG_LEVEL_ERROR, "Unable to locate XRecord extension. (%#X)", status);
+			result = { "Unable to locate XRecord extension.", "" };
             break;
 
         case UIOHOOK_ERROR_X_RECORD_ALLOC_RANGE:
-            logger(LOG_LEVEL_ERROR, "Unable to allocate XRecord range. (%#X)", status);
+			result = { "Unable to allocate XRecord range.", "" };
             break;
 
         case UIOHOOK_ERROR_X_RECORD_CREATE_CONTEXT:
-            logger(LOG_LEVEL_ERROR, "Unable to allocate XRecord context. (%#X)", status);
+			result = { "Unable to allocate XRecord context.", "" };
             break;
 
         case UIOHOOK_ERROR_X_RECORD_ENABLE_CONTEXT:
-            logger(LOG_LEVEL_ERROR, "Failed to enable XRecord context. (%#X)", status);
+			result = { "Failed to enable XRecord context.", "" };
             break;
+
+		case UIOHOOK_ERROR_X_RECORD_GET_CONTEXT:
+			// NOTE This is the only platform specific error that occurs on hook_stop().
+			result = { "Failed to get XRecord context.", "" };
+			break;
 
             
         // Windows specific errors.
         case UIOHOOK_ERROR_SET_WINDOWS_HOOK_EX:
-            logger(LOG_LEVEL_ERROR, "Failed to register low level windows hook. (%#X)", status);
+			result = { "Failed to register low level windows hook.", "" };
             break;
 
 
         // Darwin specific errors.
         case UIOHOOK_ERROR_AXAPI_DISABLED:
-            logger(LOG_LEVEL_ERROR, "Failed to enable access for assistive devices. (%#X)", status);
+			result = {
+				"Failed to enable access for assistive devices.", 
+				"Zoom plug-in requires accessibility permissions to detect key bindings. Enable the permissions in System Settins -> Accessibility -> Adobe After Effects."
+			};
             break;
 
         case UIOHOOK_ERROR_CREATE_EVENT_PORT:
-            logger(LOG_LEVEL_ERROR, "Failed to create apple event port. (%#X)", status);
+            result = { "Failed to create apple event port.", "" };
             break;
 
         case UIOHOOK_ERROR_CREATE_RUN_LOOP_SOURCE:
-            logger(LOG_LEVEL_ERROR, "Failed to create apple run loop source. (%#X)", status);
+            result = { "Failed to create apple run loop source.", "" };
             break;
 
         case UIOHOOK_ERROR_GET_RUNLOOP:
-            logger(LOG_LEVEL_ERROR, "Failed to acquire apple run loop. (%#X)", status);
+            result = { "Failed to acquire apple run loop.", "" };
             break;
 
         case UIOHOOK_ERROR_CREATE_OBSERVER:
-            logger(LOG_LEVEL_ERROR, "Failed to create apple run loop observer. (%#X)", status);
+            result = { "Failed to create apple run loop observer.", "" };
             break;
 
         // Default error.
         case UIOHOOK_FAILURE:
         default:
-            logger(LOG_LEVEL_ERROR, "An unknown hook error occurred. (%#X)", status);
+            result = { "An unknown hook error occurred.", "" };
             break;
     }
 
+	return result;
+}
+
+int HookProc(std::promise<ZOOM_STATUS> zoom_status_promise) {
+    // Set the event callback for uiohook events.
+    hook_set_dispatch_proc(&dispatch_proc, &zoom_status_promise);
+
+    // Start the hook and block.
+    // NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
+    int status = hook_run();
+
+	if (status != UIOHOOK_SUCCESS)
+	{
+		zoom_status_promise.set_value(ZOOM_STATUS::INITIALIZATION_ERROR);
+		logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
+	}
+
     return status;
+}
+
+static void StartIOHook()
+{
+	S_zoom_status.reset();
+	std::promise<ZOOM_STATUS> zoom_status_promise;
+	S_zoom_status_future = zoom_status_promise.get_future();
+	S_iohook_future = std::async(std::launch::async, HookProc, std::move(zoom_status_promise));
 }
 
 static	A_Err	IdleHook(
@@ -431,15 +498,25 @@ static	A_Err	IdleHook(
 {
 	A_Err err = A_Err_NONE;
 
-	/* Displaying errors and warnings from uiohook */
+	/* Displaying errors and warnings */
 	if (log_messages.size() > 0)
 	{
 		AEGP_SuiteHandler	suites(sP);
 		std::lock_guard lock(S_log_mutex);
 
-		for (const auto& msg : log_messages)
+		if (S_logging_enabled)
 		{
-			ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg.format));
+			for (const auto& msg : log_messages)
+			{
+				std::string msg_str = msg.format_str;
+
+				if (!msg.instructions_str.empty())
+				{
+					msg_str += "\n" + msg.instructions_str;
+				}
+
+				ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str()));
+			}
 		}
 
 		log_messages.clear();
@@ -501,32 +578,27 @@ static	A_Err	IdleHook(
 
 static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP, AEGP_DeathRefcon refconP)
 {
-	int status = hook_stop();
-	switch (status) {
-		case UIOHOOK_SUCCESS:
-			// Everything is ok.
-			break;
-
-		// System level errors.
-		case UIOHOOK_ERROR_OUT_OF_MEMORY:
-			logger(LOG_LEVEL_ERROR, "Failed to allocate memory. (%#X)", status);
-			break;
-
-		case UIOHOOK_ERROR_X_RECORD_GET_CONTEXT:
-			// NOTE This is the only platform specific error that occurs on hook_stop().
-			logger(LOG_LEVEL_ERROR, "Failed to get XRecord context. (%#X)", status);
-			break;
-
-		// Default error.
-		case UIOHOOK_FAILURE:
-		default:
-			logger(LOG_LEVEL_ERROR, "An unknown hook error occurred. (%#X)", status);
-			break;
-	}
-
-	if (S_uiohook_thread.joinable())
+	// if the iohook thread is not finished
+	if (S_iohook_future.valid() 
+		&& S_iohook_future.wait_for(std::chrono::seconds(0)) == std::future_status::timeout)
 	{
-		S_uiohook_thread.join();
+		int status = hook_stop();
+
+		if (status != UIOHOOK_SUCCESS)
+		{
+			logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
+		}
+
+		//if (S_uiohook_thread.joinable())
+		//{
+		//	S_uiohook_thread.join();
+		//}
+
+		if (S_iohook_future.valid() &&
+			S_iohook_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
+		{
+			logger(LOG_LEVEL_ERROR, "Zoom Plug-in did not close properly.", "");
+		}
 	}
 
 	return A_Err_NONE;
@@ -558,11 +630,9 @@ A_Err EntryPointFunc(
 
 	ERR(ReadKeyBindings());
 
-    // Set the event callback for uiohook events.
-    hook_set_dispatch_proc(&dispatch_proc, NULL);
-
 	// Start hook thread
-	S_uiohook_thread = std::thread(HookProc);
+	//S_uiohook_thread = std::thread(HookProc);
+	StartIOHook();
 
 	return err;
 }
@@ -608,13 +678,75 @@ extern "C" DllExport char* ESInitialize(const TaggedData * *argv, long argc)
 extern "C" DllExport void ESTerminate()
 {}
 
-/* This function is called from the script panel */
-extern "C" DllExport long isAvailableFn(TaggedData* argv, long argc, TaggedData* retval)
+template <typename T>
+static std::optional<T> WaitForFuture(const std::shared_future<T>& f, std::chrono::seconds sec)
 {
-	// return true
-	retval->type = kTypeBool;
-	retval->data.intval = 1;
+	std::optional<T> result;
 
+	if (f.valid() && f.wait_for(sec) == std::future_status::ready)
+	{
+		result = f.get();
+	}
+
+	return result;
+}
+
+static void FillZoomStatusForScript(TaggedData* retval)
+{
+	auto zoom_status = WaitForFuture(S_zoom_status_future, std::chrono::seconds(0));
+
+	if (zoom_status)
+	{
+		retval->type = kTypeInteger;
+		retval->data.intval = static_cast<long>(zoom_status.value());
+	}
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long status(TaggedData* argv, long argc, TaggedData* retval)
+{
+	FillZoomStatusForScript(retval);
+
+	return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long getError(TaggedData * argv, long argc, TaggedData * retval)
+{
+	auto iohook_status = WaitForFuture(S_iohook_future, std::chrono::seconds(0));
+
+	if (iohook_status)
+	{
+		auto [error_str, insructions_str] = GetHookErrorStrings(iohook_status.value());
+		std::string str = error_str + "\n" + insructions_str;
+
+		retval->type = kTypeString;
+		retval->data.string = getNewBuffer(str);
+	}
+
+	return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long reload(TaggedData * argv, long argc, TaggedData * retval)
+{
+	// Disable logging because we want to pass all errors to the script
+	S_logging_enabled = false;
+
+	auto iohook_status = WaitForFuture(S_iohook_future, std::chrono::seconds(0));
+
+	// if the status exists that means that the hook has ended and we can start it again
+	if (iohook_status)
+	{
+		StartIOHook();
+
+		// wait for zoom status
+		auto zoom_status = WaitForFuture(S_zoom_status_future, std::chrono::seconds(5));
+
+		FillZoomStatusForScript(retval);
+	}
+
+	S_logging_enabled = true;
 	return kESErrOK;
 }
 
