@@ -1,7 +1,8 @@
 #pragma once
 
 #include <mutex>
-#include <thread>
+#include <atomic>
+#include <future>
 #include <string>
 #include <vector>
 #include <optional>
@@ -37,21 +38,18 @@ constexpr char SETTINGS_SECTION_NAME[] = "Quis/Ae_Smooth_Zoom";
 extern "C" DllExport AEGP_PluginInitFuncPrototype EntryPointFunc;
 
 class LogMessage {
-private:
-	std::string format_str;
 public:
 	unsigned int level = 0;
-	const char* format = nullptr;
+	std::string format_str;
+	std::string instructions_str;
 
-	LogMessage(unsigned int level, const char* format)
-		: level(level), format(format)
+	LogMessage(
+		unsigned int level, 
+		const std::string& _format_str, 
+		const std::string& _instructions_str
+	)
+		: level(level), format_str(_format_str), instructions_str(_instructions_str)
 	{}
-
-	LogMessage(unsigned int level, const std::string& _format_str)
-		: format_str(_format_str), level(level) 
-	{
-		format = format_str.c_str();
-	}
 };
 
 enum class WIND_RECT
@@ -65,6 +63,13 @@ enum class KB_ACTION
 	INCREASE,
 	DECREASE,
 	SET_TO
+};
+
+enum class ZOOM_STATUS
+{
+	INITIALIZATION_ERROR,
+	INITIALIZED,
+	FINISHED
 };
 
 class KeyCodes 
