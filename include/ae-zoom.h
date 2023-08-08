@@ -69,6 +69,7 @@ enum class ZOOM_STATUS
 {
 	INITIALIZATION_ERROR,
 	INITIALIZED,
+	FINISHED
 };
 
 class KeyCodes 

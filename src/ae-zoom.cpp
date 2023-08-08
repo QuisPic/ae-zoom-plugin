@@ -436,7 +436,7 @@ std::tuple<std::string, std::string> GetHookErrorStrings(int status)
         case UIOHOOK_ERROR_AXAPI_DISABLED:
 			result = {
 				"Failed to enable access for assistive devices.", 
-				"Zoom plug-in requires accessibility permissions to detect key bindings. Enable the permissions in System Settins -> Accessibility -> Adobe After Effects."
+				"Zoom plug-in requires accessibility permissions to detect key bindings. Enable the permissions in System Settings -> Privacy & Security -> Accessibility -> Adobe After Effects."
 			};
             break;
 
@@ -697,8 +697,18 @@ static void FillZoomStatusForScript(TaggedData* retval)
 
 	if (zoom_status)
 	{
+		auto iohook_status = WaitForFuture(S_iohook_future, std::chrono::seconds(0));
+
 		retval->type = kTypeInteger;
-		retval->data.intval = static_cast<long>(zoom_status.value());
+
+		if (iohook_status && iohook_status.value() == UIOHOOK_SUCCESS)
+		{
+			retval->data.intval = static_cast<long>(ZOOM_STATUS::FINISHED);
+		}
+		else
+		{
+			retval->data.intval = static_cast<long>(zoom_status.value());
+		}
 	}
 }
 
