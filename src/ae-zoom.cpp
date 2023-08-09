@@ -155,6 +155,9 @@ std::tuple<A_Err, std::string> RunExtendscript(const std::string& script_str)
 		logger(LOG_LEVEL_ERROR, error_str, "");
 	}
 
+	ERR(suites.MemorySuite1()->AEGP_FreeMemHandle(outResultH));
+	ERR(suites.MemorySuite1()->AEGP_FreeMemHandle(outErrStringH));
+
 	return { err, result_str };
 }
 
@@ -589,11 +592,6 @@ static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP, AEGP_DeathRefcon refcon
 			logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
 		}
 
-		//if (S_uiohook_thread.joinable())
-		//{
-		//	S_uiohook_thread.join();
-		//}
-
 		if (S_iohook_future.valid() &&
 			S_iohook_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready)
 		{
@@ -611,28 +609,34 @@ A_Err EntryPointFunc(
 	AEGP_PluginID			aegp_plugin_id,		/* >> */
 	AEGP_GlobalRefcon		*global_refconP)	/* << */
 {
-	sP = pica_basicP;
-	S_zoom_id = aegp_plugin_id;
-	AEGP_SuiteHandler suites(sP);
-	S_call_idle_routines = suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
-
 	A_Err err = A_Err_NONE;
 	A_Err err2 = A_Err_NONE;
-    
-	ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
-	ERR(suites.RegisterSuite5()->AEGP_RegisterDeathHook(S_zoom_id, DeathHook, 0));
 
-	ERR(suites.MemorySuite1()->AEGP_SetMemReportingOn(true));
+	try {
+		sP = pica_basicP;
+		S_zoom_id = aegp_plugin_id;
+		AEGP_SuiteHandler suites(sP);
+		S_call_idle_routines = suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
+		
+		ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
+		ERR(suites.RegisterSuite5()->AEGP_RegisterDeathHook(S_zoom_id, DeathHook, 0));
 
-#ifdef AE_OS_WIN
-	ERR(suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h));
-#endif
+		ERR(suites.MemorySuite1()->AEGP_SetMemReportingOn(true));
 
-	ERR(ReadKeyBindings());
+		#ifdef AE_OS_WIN
+		ERR(suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h));
+		#endif
 
-	// Start hook thread
-	//S_uiohook_thread = std::thread(HookProc);
-	StartIOHook();
+		ERR(ReadKeyBindings());
+
+		// Start hook thread
+		StartIOHook();
+
+	}
+	catch (A_Err& thrown_err)
+	{
+		err = thrown_err;
+	}
 
 	return err;
 }
