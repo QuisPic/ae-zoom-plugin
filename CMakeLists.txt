@@ -79,7 +79,7 @@ if( WIN32 )
 elseif( APPLE )
 	set(
 		PLUGIN_FOLDER
-		"/Applications/Adobe After Effects 2022/Plug-ins"
+		"/Applications/Adobe After Effects 2023/Plug-ins"
 		CACHE
 		STRING
 		"After Effects Plugin folder"

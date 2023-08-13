@@ -306,7 +306,8 @@ bool IsCursorOnMainWindow() {
 void dispatch_proc(uiohook_event * const event, void *user_data) {
 	static uint16_t last_key_code = VC_UNDEFINED;
 
-	if (event->type == EVENT_HOOK_ENABLED)
+	if (event->type == EVENT_HOOK_ENABLED &&
+		S_zoom_status_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
 	{
 		auto zoom_status_promise = std::bit_cast<std::promise<ZOOM_STATUS>*>(user_data);
 		zoom_status_promise->set_value(ZOOM_STATUS::INITIALIZED);
@@ -479,7 +480,11 @@ int HookProc(std::promise<ZOOM_STATUS> zoom_status_promise) {
 
 	if (status != UIOHOOK_SUCCESS)
 	{
-		zoom_status_promise.set_value(ZOOM_STATUS::INITIALIZATION_ERROR);
+		if (S_zoom_status_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+		{ 
+			zoom_status_promise.set_value(ZOOM_STATUS::INITIALIZATION_ERROR);
+		}
+
 		logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
 	}
 
@@ -695,6 +700,21 @@ static std::optional<T> WaitForFuture(const std::shared_future<T>& f, std::chron
 	return result;
 }
 
+template <typename F> void try_catch(F&& f) {
+	try 
+	{ 
+		f(); 
+	}
+	catch (std::exception& e) 
+	{
+		logger(LOG_LEVEL_ERROR, "Error: " + std::string(e.what()), "");
+	}
+	catch (...) 
+	{
+		logger(LOG_LEVEL_ERROR, "Unknown Error", "");
+	}
+}
+
 static void FillZoomStatusForScript(TaggedData* retval)
 {
 	auto zoom_status = WaitForFuture(S_zoom_status_future, std::chrono::seconds(0));
@@ -705,7 +725,7 @@ static void FillZoomStatusForScript(TaggedData* retval)
 
 		retval->type = kTypeInteger;
 
-		if (iohook_status && iohook_status.value() == UIOHOOK_SUCCESS)
+		if (iohook_status.has_value())
 		{
 			retval->data.intval = static_cast<long>(ZOOM_STATUS::FINISHED);
 		}
@@ -719,7 +739,7 @@ static void FillZoomStatusForScript(TaggedData* retval)
 /* This function is called from the script panel */
 extern "C" DllExport long status(TaggedData* argv, long argc, TaggedData* retval)
 {
-	FillZoomStatusForScript(retval);
+	try_catch([&retval]() { FillZoomStatusForScript(retval); });
 
 	return kESErrOK;
 }
@@ -727,16 +747,18 @@ extern "C" DllExport long status(TaggedData* argv, long argc, TaggedData* retval
 /* This function is called from the script panel */
 extern "C" DllExport long getError(TaggedData * argv, long argc, TaggedData * retval)
 {
-	auto iohook_status = WaitForFuture(S_iohook_future, std::chrono::seconds(0));
+	try_catch([&retval]() {
+		auto iohook_status = WaitForFuture(S_iohook_future, std::chrono::seconds(0));
 
-	if (iohook_status)
-	{
-		auto [error_str, insructions_str] = GetHookErrorStrings(iohook_status.value());
-		std::string str = error_str + "\n" + insructions_str;
+		if (iohook_status)
+		{
+			auto [error_str, insructions_str] = GetHookErrorStrings(iohook_status.value());
+			std::string str = error_str + "\n" + insructions_str;
 
-		retval->type = kTypeString;
-		retval->data.string = getNewBuffer(str);
-	}
+			retval->type = kTypeString;
+			retval->data.string = getNewBuffer(str);
+		}
+	});
 
 	return kESErrOK;
 }
@@ -744,46 +766,57 @@ extern "C" DllExport long getError(TaggedData * argv, long argc, TaggedData * re
 /* This function is called from the script panel */
 extern "C" DllExport long reload(TaggedData * argv, long argc, TaggedData * retval)
 {
-	// Disable logging because we want to pass all errors to the script
-	S_logging_enabled = false;
+	try_catch([&retval]() {
+		// Disable logging because we want to pass all errors to the script
+		S_logging_enabled = false;
 
-	auto iohook_status = WaitForFuture(S_iohook_future, std::chrono::seconds(0));
+		auto iohook_status = WaitForFuture(S_iohook_future, std::chrono::seconds(0));
 
-	// if the status exists that means that the hook has ended and we can start it again
-	if (iohook_status)
-	{
-		StartIOHook();
+		// if the status exists that means that the hook has ended and we can start it again
+		if (iohook_status)
+		{
+			StartIOHook();
 
-		// wait for zoom status
-		auto zoom_status = WaitForFuture(S_zoom_status_future, std::chrono::seconds(5));
+			// wait for zoom status
+			auto zoom_status = WaitForFuture(S_zoom_status_future, std::chrono::seconds(5));
 
-		FillZoomStatusForScript(retval);
-	}
+			FillZoomStatusForScript(retval);
+		}
 
-	S_logging_enabled = true;
+		S_logging_enabled = true;
+	});
+
 	return kESErrOK;
 }
 
 /* This function is called from the script panel */
 extern "C" DllExport long updateKeyBindings(TaggedData* argv, long argc, TaggedData* retval)
 {
-	ReadKeyBindings();
+	try_catch([&retval]() {
+		ReadKeyBindings();
+	});
+
 	return kESErrOK;
 }
 
 /* This function is called from the script panel */
 extern "C" DllExport long startKeyCapture(TaggedData* argv, long argc, TaggedData* retval)
 {
-	S_is_creating_key_bind = true;
-	S_key_codes_pass.reset();
+	try_catch([&retval]() {
+		S_is_creating_key_bind = true;
+		S_key_codes_pass.reset();
+	});
+
 	return kESErrOK;
 }
 
 /* This function is called from the script panel */
 extern "C" DllExport long endKeyCapture(TaggedData* argv, long argc, TaggedData* retval)
 {
-	S_is_creating_key_bind = false;
-	S_key_codes_pass.reset();
+	try_catch([&retval]() {
+		S_is_creating_key_bind = false;
+		S_key_codes_pass.reset();
+	});
 
 	return kESErrOK;
 }
