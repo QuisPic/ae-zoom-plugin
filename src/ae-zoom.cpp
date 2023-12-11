@@ -1,4 +1,5 @@
 #include "ae-zoom.h"
+#include "experimental.h"
 
 #ifdef AE_OS_MAC
 #include <objc/objc-runtime.h>
@@ -20,6 +21,8 @@ static std::optional<ZOOM_STATUS>			S_zoom_status;
 static std::shared_future<int>				S_iohook_future;
 static std::optional<KeyCodes>				S_key_codes_pass;
 static std::vector<KeyBindAction>			S_key_bindings;
+
+static AEGP_Command							hack_cmd;
 
 #ifdef AE_OS_WIN
 static HWND									S_main_win_h = nullptr;
@@ -62,7 +65,7 @@ static char* getNewBuffer(std::string& s)
 }
 
 
-static void logger(
+void logger(
 	unsigned int level, 
 	std::tuple<std::string, std::string> strings
 ) {
@@ -83,7 +86,7 @@ static void logger(
     }
 }
 
-static void logger(
+void logger(
 	unsigned int level, 
 	const std::string& format_str,
 	const std::string& instructions_str
@@ -584,6 +587,44 @@ static	A_Err	IdleHook(
 	return err;
 }
 
+static A_Err CommandHook(
+	AEGP_GlobalRefcon	plugin_refconPV,		/* >> */
+	AEGP_CommandRefcon	refconPV,				/* >> */
+	AEGP_Command		command,				/* >> */
+	AEGP_HookPriority	hook_priority,			/* >> */
+	A_Boolean			already_handledB,		/* >> */
+	A_Boolean* handledPB)				/* << */
+{
+	A_Err err = A_Err_NONE;
+
+	if (already_handledB)
+	{
+		return err;
+	}
+
+	if (command == hack_cmd)
+	{
+		HackBipBop();
+		*handledPB = true;
+	}
+
+	return err;
+}
+
+static A_Err
+UpdateMenuHook(
+	AEGP_GlobalRefcon		plugin_refconPV,	/* >> */
+	AEGP_UpdateMenuRefcon	refconPV,			/* >> */
+	AEGP_WindowType			active_window)		/* >> */
+{
+	A_Err err = A_Err_NONE;
+	AEGP_SuiteHandler suites(sP);
+
+	ERR(suites.CommandSuite1()->AEGP_EnableCommand(hack_cmd));
+
+	return err;
+}
+
 static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP, AEGP_DeathRefcon refconP)
 {
 	// if the iohook thread is not finished
@@ -622,6 +663,14 @@ A_Err EntryPointFunc(
 		S_zoom_id = aegp_plugin_id;
 		AEGP_SuiteHandler suites(sP);
 		S_call_idle_routines = suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
+
+		ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&hack_cmd));
+
+		ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(hack_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
+
+		ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
+
+		ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(S_zoom_id, UpdateMenuHook, 0));
 		
 		ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
 		ERR(suites.RegisterSuite5()->AEGP_RegisterDeathHook(S_zoom_id, DeathHook, 0));

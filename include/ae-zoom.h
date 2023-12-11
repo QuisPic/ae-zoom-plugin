@@ -149,5 +149,16 @@ public:
 	{}
 };
 
+void logger(
+	unsigned int,
+	std::tuple<std::string, std::string>
+);
+
+void logger(
+	unsigned int,
+	const std::string&,
+	const std::string&
+);
+
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(KeyCodes, type, mask, keycode);
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(KeyBindAction, keyCodes, action, amount);

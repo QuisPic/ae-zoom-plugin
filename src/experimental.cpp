@@ -1,3 +1,4 @@
+#include "ae-zoom.h"
 #include "experimental.h"
 
 #ifdef AE_OS_WIN
@@ -7,7 +8,7 @@ T GetFromAfterFXDll(std::string fn_name)
 	HINSTANCE hDLL = LoadLibrary("AfterFXLib.dll");
 
 	if (!hDLL) {
-		logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.dll");
+		logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.dll", "");
 		return nullptr;
 	}
 
@@ -19,35 +20,35 @@ T GetFromAfterFXDll(std::string fn_name)
 
 void HackBipBop()
 {
-	AEGP_SuiteHandler	suites(sP);
+	//AEGP_SuiteHandler	suites(sP);
 	//suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, std::to_string(helpCtx).c_str());
 
 	auto gEgg = GetFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
-	//auto GetSelectedToolFn = GetFromAfterFXDll<GetSelectedTool>("?GetSelectedTool@CEggApp@@QEBA?AW4ToolID@@XZ");
-	auto GetActualPrimaryPreviewItemFn = 
+
+	typedef void (__stdcall* GetActualPrimaryPreviewItem)(CEggApp*, CPanoProjItem**, CDirProjItem**, BEE_Item**, bool, bool, bool);
+	auto GetActualPrimaryPreviewItemFn =
 		GetFromAfterFXDll<GetActualPrimaryPreviewItem>(
-			"?GetActualPrimaryPreviewItem@CEggApp@@QEAAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
-		);
-	auto GetCurrentItemFn = 
-		GetFromAfterFXDll<GetCurrentItem>(
-			"?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z"
-		);
-	auto GetCurrentItemHFn = 
-		GetFromAfterFXDll<GetCurrentItemH>(
-			"?GetCurrentItemH@CEggApp@@QEAAPEAVBEE_Item@@XZ"
+			"?GetActualPrimaryPreviewItem@CEggApp@@QEBAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
 		);
 
 	CPanoProjItem* view_pano = nullptr;
-	CDirProjItem* ccdir = nullptr;
-	//BEE_Item* bee_item = nullptr;
-	//GetCurrentItemFn(gEgg, &bee_item, &view_pano);
-	BEE_Item* bee_item = GetCurrentItemHFn(gEgg);
-	//GetActualPrimaryPreviewItemFn(gEgg, &view_pano, &ccdir, &bee_item, false, false, false);
-	//auto selectedTool = GetSelectedTool(gEgg);
+	BEE_Item* bee_item = nullptr;
 
-	if (bee_item)
+	if (gEgg)
 	{
-		suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, "yesssssssssssssss");
+		GetActualPrimaryPreviewItemFn(gEgg, &view_pano, nullptr, &bee_item, true, true, true);
+
+		if (view_pano)
+		{
+			// call to "virtual void __cdecl CPanorama::ScrollTo(struct LongPt * __ptr64,unsigned char) __ptr64" from AfterFXLib.dll AE CC2024
+			typedef void (__fastcall** ScrollToP)(CPanoProjItem*, LongPt*, unsigned char);
+			__int64 ScrollTo_addr = *reinterpret_cast<__int64*>(view_pano) + 0x490;
+			const ScrollToP ScrollTo = reinterpret_cast<ScrollToP>(ScrollTo_addr);
+
+			LongPt pt = { 1, 1 };
+
+			(*ScrollTo)(view_pano, &pt, 1);
+		}
 	}
 }
 #endif

@@ -38,7 +38,7 @@ add_subdirectory(extern)
 add_library(
 	${PROJECT_NAME}
 	MODULE
-	src/ae-zoom.cpp)
+	src/ae-zoom.cpp src/experimental.cpp)
 
 target_include_directories(
 	${PROJECT_NAME}
@@ -49,7 +49,7 @@ target_include_directories(
 if( WIN32 )
 	set(
 		PLUGIN_FOLDER
-		"C:/Program Files/Adobe/Adobe After Effects 2023/Support Files/Plug-ins"
+		"C:/Program Files/Adobe/Adobe After Effects 2024/Support Files/Plug-ins"
 		CACHE
 		STRING
 		"After Effects Plugin folder"
