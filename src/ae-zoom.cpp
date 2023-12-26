@@ -1,5 +1,5 @@
 #include "ae-zoom.h"
-#include "experimental.h"
+#include "ae-egg.h"
 
 #ifdef AE_OS_MAC
 #include <objc/objc-runtime.h>
@@ -9,8 +9,8 @@
 #define STRINGIFY(...) #__VA_ARGS__
 #define STR(...) STRINGIFY(__VA_ARGS__)
 
-static AEGP_PluginID						S_zoom_id = 0L;
-static SPBasicSuite*						sP = NULL;
+static AEGP_PluginID S_zoom_id = 0L;
+static SPBasicSuite* sP = NULL;
 
 static A_Err (*S_call_idle_routines)(void) = nullptr;
 
@@ -34,6 +34,9 @@ static std::vector<KeyBindAction*>			S_zoom_actions;
 static std::mutex							S_create_key_bind_mutex;
 static std::mutex							S_zoom_action_mutex;
 static std::mutex							S_log_mutex;
+
+static AeEgg								S_ae_egg;
+static bool									S_experimental = true;
 
 static std::string zoom_increment_js = {
 	#include "JS/zoom-increment.js"
@@ -557,28 +560,45 @@ static	A_Err	IdleHook(
 	/* Changing zoom on key presses */
 	if (S_zoom_actions.size() > 0) 
 	{
-		AEGP_SuiteHandler	suites(sP);
 		std::string script_str;
 
 		const std::lock_guard lock(S_zoom_action_mutex);
 		for (const auto act : S_zoom_actions)
 		{
-			switch (act->action)
+			if (S_experimental)
 			{
-			case KB_ACTION::INCREASE:
-				script_str = zoom_increment_js + "(" + std::to_string(act->amount) + ")";
-				break;
-			case KB_ACTION::DECREASE:
-				script_str = zoom_increment_js + "(" + std::to_string(-act->amount) + ")";
-				break;
-			case KB_ACTION::SET_TO:
-				script_str = zoom_set_to_js + "(" + std::to_string(act->amount) + ")";
-				break;
-			default:
-				break;
+				
+				switch (act->action)
+				{
+				case KB_ACTION::INCREASE:
+					S_ae_egg.incrementViewZoomFixed(act->amount / 100.0);
+					break;
+				case KB_ACTION::DECREASE:
+					S_ae_egg.incrementViewZoomFixed(-act->amount / 100.0);
+					break;
+				default:
+					break;
+				}
 			}
+			else
+			{
+				switch (act->action)
+				{
+				case KB_ACTION::INCREASE:
+					script_str = zoom_increment_js + "(" + std::to_string(act->amount) + ")";
+					break;
+				case KB_ACTION::DECREASE:
+					script_str = zoom_increment_js + "(" + std::to_string(-act->amount) + ")";
+					break;
+				case KB_ACTION::SET_TO:
+					script_str = zoom_set_to_js + "(" + std::to_string(act->amount) + ")";
+					break;
+				default:
+					break;
+				}
 
-			std::tie(err, std::ignore) = RunExtendscript(script_str);
+				std::tie(err, std::ignore) = RunExtendscript(script_str);
+			}
 		}
 
 		S_zoom_actions.clear();
@@ -604,7 +624,28 @@ static A_Err CommandHook(
 
 	if (command == hack_cmd)
 	{
-		HackBipBop();
+		// S_ae_egg.moveViewPanoTo({ 1, 1 });
+
+		AEGP_SuiteHandler	suites(sP);
+		POINT cursor_pos;
+
+		GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
+
+		CPanoProjItem* view_pano = S_ae_egg.getViewPano();
+		// M_Vector2T<double> cursor_vec = { static_cast<double>(cursor_pos.y), static_cast<double>(cursor_pos.x) };
+		M_Vector2T<double> cursor_vec = { 0, 0 };
+		// S_ae_egg.SetFloatZoomFn(view_pano, 2, { 100, 100 }, true, true, false, false, true);
+
+		//LongPt pano_pos = S_ae_egg.getViewPanoPosition();
+		//M_Point pano_origin = S_ae_egg.ScreenToCompMouse(cursor_pos);
+
+		M_Point local_mouse;
+		S_ae_egg.GetLocalMouseFn(view_pano, &local_mouse);
+
+		std::string msg_str = "X: " + std::to_string(local_mouse.x) + ", Y: " + std::to_string(local_mouse.y);
+
+		suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
+
 		*handledPB = true;
 	}
 

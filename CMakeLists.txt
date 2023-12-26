@@ -38,7 +38,7 @@ add_subdirectory(extern)
 add_library(
 	${PROJECT_NAME}
 	MODULE
-	src/ae-zoom.cpp src/experimental.cpp)
+	"src/ae-zoom.cpp" "src/ae-egg.cpp")
 
 target_include_directories(
 	${PROJECT_NAME}
