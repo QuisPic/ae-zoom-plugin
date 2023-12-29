@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 class BEE_Project;
 class BEE_Item;
 class CPane;
@@ -35,6 +37,12 @@ typedef void(__stdcall* PointFrameToFloatSource)(CPanoProjItem*, M_Point, M_Vect
 typedef void(__stdcall* SetFloatZoom)(CPanoProjItem*, double, LongPt, bool, bool, bool, bool, bool);
 typedef double(__stdcall* GetFloatZoom)(CPanoProjItem*);
 
+enum class ZOOM_AROUND
+{
+	PANEL_CENTER,
+	CURSOR_POSTION
+};
+
 class AeEgg
 {
 public:
@@ -56,5 +64,23 @@ public:
 	short getCPaneHeight();
 	M_Point ScreenToCompMouse(POINT screen_p);
 	M_Point getMouseRelativeToComp();
-	void incrementViewZoomFixed(double zoom_delta);
+	LongPt getMouseRelativeToViewPano();
+	bool isMouseInsideViewPano();
+	void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
+};
+
+struct ViewPositionExperimentalOption
+{
+	bool enabled;
+	ZOOM_AROUND zoomAround;
+
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(ViewPositionExperimentalOption, enabled, zoomAround);
+};
+
+struct ExperimentalOptions
+{
+	bool detectCursorInsideView;
+	ViewPositionExperimentalOption fixViewportPosition;
+
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(ExperimentalOptions, detectCursorInsideView, fixViewportPosition);
 };

@@ -36,7 +36,7 @@ static std::mutex							S_zoom_action_mutex;
 static std::mutex							S_log_mutex;
 
 static AeEgg								S_ae_egg;
-static bool									S_experimental = true;
+static ExperimentalOptions					S_experimental_options;
 
 static std::string zoom_increment_js = {
 	#include "JS/zoom-increment.js"
@@ -167,18 +167,12 @@ std::tuple<A_Err, std::string> RunExtendscript(const std::string& script_str)
 	return { err, result_str };
 }
 
-static A_Err ReadKeyBindings()
+static A_Err ReadOption(const std::string& key_name, A_char* data_buf)
 {
 	A_Err err = A_Err_NONE;
 	AEGP_SuiteHandler	suites(sP);
 	AEGP_PersistentBlobH blobH;
-	A_char key_bindings_buf[2000];
 	A_Boolean key_exists = false;
-
-	if (S_key_bindings.size() > 0)
-	{
-		S_key_bindings.clear();
-	}
 
 	ERR(suites.PersistentDataSuite4()->AEGP_GetApplicationBlob(AEGP_PersistentType_MACHINE_SPECIFIC, &blobH));
 
@@ -187,7 +181,7 @@ static A_Err ReadKeyBindings()
 		ERR(suites.PersistentDataSuite4()->AEGP_DoesKeyExist(
 			blobH,
 			SETTINGS_SECTION_NAME,
-			"keyBindings",
+			key_name.c_str(),
 			&key_exists));
 
 		if (key_exists)
@@ -195,24 +189,51 @@ static A_Err ReadKeyBindings()
 			ERR(suites.PersistentDataSuite4()->AEGP_GetString(
 				blobH,
 				SETTINGS_SECTION_NAME,
-				"keyBindings",
+				key_name.c_str(),
 				nullptr,
 				2000,
-				key_bindings_buf,
+				data_buf,
 				nullptr
 			));
-
-			json key_bindings_json = json::parse(std::string(key_bindings_buf));
-
-			for (const auto& kbind_j : key_bindings_json) {
-				if (!kbind_j["enabled"])
-				{
-					continue;
-				}
-
-				S_key_bindings.emplace_back(kbind_j.get<KeyBindAction>());
-			}
 		}
+	}
+
+	return err;
+}
+
+static A_Err ReadExperimentalOptions()
+{
+	A_Err err = A_Err_NONE;
+	A_char experimental_buf[2000];
+
+	ERR(ReadOption("experimental", experimental_buf));
+	json experimental_json = json::parse(std::string(experimental_buf));
+
+	S_experimental_options = experimental_json.get<ExperimentalOptions>();
+
+	return err;
+}
+
+static A_Err ReadKeyBindings()
+{
+	A_Err err = A_Err_NONE;
+	A_char key_bindings_buf[2000];
+
+	if (S_key_bindings.size() > 0)
+	{
+		S_key_bindings.clear();
+	}
+
+	ERR(ReadOption("keyBindings", key_bindings_buf));
+	json key_bindings_json = json::parse(std::string(key_bindings_buf));
+
+	for (const auto& kbind_j : key_bindings_json) {
+		if (!kbind_j["enabled"])
+		{
+			continue;
+		}
+
+		S_key_bindings.emplace_back(kbind_j.get<KeyBindAction>());
 	}
 
 	return err;
@@ -358,7 +379,8 @@ void dispatch_proc(uiohook_event * const event, void *user_data) {
 
 			for (KeyBindAction& kbind : S_key_bindings)
 			{
-				if (current_key_codes == kbind.keyCodes)
+				if (current_key_codes == kbind.keyCodes &&
+					(S_experimental_options.detectCursorInsideView ? S_ae_egg.isMouseInsideViewPano() : true))
 				{
 					std::lock_guard lock(S_zoom_action_mutex);
 					S_zoom_actions.push_back(&kbind);
@@ -565,16 +587,21 @@ static	A_Err	IdleHook(
 		const std::lock_guard lock(S_zoom_action_mutex);
 		for (const auto act : S_zoom_actions)
 		{
-			if (S_experimental)
+			if (S_experimental_options.fixViewportPosition.enabled)
 			{
-				
 				switch (act->action)
 				{
 				case KB_ACTION::INCREASE:
-					S_ae_egg.incrementViewZoomFixed(act->amount / 100.0);
+					S_ae_egg.incrementViewZoomFixed(
+						act->amount / 100.0, 
+						S_experimental_options.fixViewportPosition.zoomAround
+					);
 					break;
 				case KB_ACTION::DECREASE:
-					S_ae_egg.incrementViewZoomFixed(-act->amount / 100.0);
+					S_ae_egg.incrementViewZoomFixed(
+						-act->amount / 100.0,
+						S_experimental_options.fixViewportPosition.zoomAround
+					);
 					break;
 				default:
 					break;
@@ -637,12 +664,12 @@ static A_Err CommandHook(
 		// S_ae_egg.SetFloatZoomFn(view_pano, 2, { 100, 100 }, true, true, false, false, true);
 
 		//LongPt pano_pos = S_ae_egg.getViewPanoPosition();
-		//M_Point pano_origin = S_ae_egg.ScreenToCompMouse(cursor_pos);
+		M_Point pano_origin = S_ae_egg.ScreenToCompMouse(cursor_pos);
 
-		M_Point local_mouse;
-		S_ae_egg.GetLocalMouseFn(view_pano, &local_mouse);
+		//M_Point local_mouse;
+		//S_ae_egg.GetLocalMouseFn(view_pano, &local_mouse);
 
-		std::string msg_str = "X: " + std::to_string(local_mouse.x) + ", Y: " + std::to_string(local_mouse.y);
+		std::string msg_str = "X: " + std::to_string(pano_origin.x) + ", Y: " + std::to_string(pano_origin.y);
 
 		suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
 
@@ -723,6 +750,7 @@ A_Err EntryPointFunc(
 		#endif
 
 		ERR(ReadKeyBindings());
+		ERR(ReadExperimentalOptions());
 
 		// Start hook thread
 		StartIOHook();
@@ -884,6 +912,16 @@ extern "C" DllExport long updateKeyBindings(TaggedData* argv, long argc, TaggedD
 {
 	try_catch([&retval]() {
 		ReadKeyBindings();
+	});
+
+	return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long updateExperimentalOptions(TaggedData* argv, long argc, TaggedData* retval)
+{
+	try_catch([&retval]() {
+		ReadExperimentalOptions();
 	});
 
 	return kESErrOK;

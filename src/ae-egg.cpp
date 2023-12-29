@@ -52,7 +52,7 @@ CPanoProjItem* AeEgg::getViewPano()
 {
 	CPanoProjItem* view_pano = nullptr;
 
-	this->GetActualPrimaryPreviewItemFn(this->gEgg, &view_pano, nullptr, nullptr, true, true, true);
+	GetActualPrimaryPreviewItemFn(this->gEgg, &view_pano, nullptr, nullptr, true, true, true);
 
 	return view_pano;
 }
@@ -132,12 +132,35 @@ M_Point AeEgg::getMouseRelativeToComp()
 	return pp;
 }
 
-void AeEgg::incrementViewZoomFixed(double zoom_delta)
+LongPt AeEgg::getMouseRelativeToViewPano()
+{
+	auto mouse_rel_to_comp = getMouseRelativeToComp();
+	auto view_pano_position = getViewPanoPosition();
+
+	/* view pano position is negative */
+	return {
+		mouse_rel_to_comp.y - view_pano_position.y,
+		mouse_rel_to_comp.x - view_pano_position.x,
+	};
+}
+
+bool AeEgg::isMouseInsideViewPano()
+{
+	auto mouse_rel_to_view = getMouseRelativeToViewPano();
+	auto view_pano_width = getCPaneWidth();
+	auto view_pano_height = getCPaneHeight();
+
+	return (
+		mouse_rel_to_view.x >= 0 &&
+		mouse_rel_to_view.y >= 0 &&
+		mouse_rel_to_view.x <= view_pano_width &&
+		mouse_rel_to_view.y <= view_pano_height
+	);
+}
+
+void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around)
 {
 	CPanoProjItem* view_pano = getViewPano();
-
-	short cpane_width = getCPaneWidth();
-	short cpane_height = getCPaneHeight();
 
 	double current_zoom = GetFloatZoomFn(view_pano);
 	double new_zoom = current_zoom + zoom_delta;
@@ -146,38 +169,78 @@ void AeEgg::incrementViewZoomFixed(double zoom_delta)
 	GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
 
 	LongPt actual_view_pos = getViewPanoPosition();
-	M_Point comp_mouse_pos = getMouseRelativeToComp();
 
-	DoublePt cpane_mouse_pos = {
-		-actual_view_pos.y + comp_mouse_pos.y,
-		-actual_view_pos.x + comp_mouse_pos.x,
+	DoublePt view_pos = {
+		lround(last_view_pos.y) == actual_view_pos.y ? last_view_pos.y : actual_view_pos.y,
+		lround(last_view_pos.x) == actual_view_pos.x ? last_view_pos.x : actual_view_pos.x,
 	};
 
+	DoublePt zoom_pt;
+	DoublePt dist_to_zoom_pt;
+
+	switch (zoom_around)
+	{
+	case ZOOM_AROUND::PANEL_CENTER:
+	{
+		double cpane_width2 = getCPaneWidth() / 2.0;
+		double cpane_height2 = getCPaneHeight() / 2.0;
+
+		dist_to_zoom_pt = {
+			-cpane_height2 - view_pos.y,
+			-cpane_width2 - view_pos.x,
+		};
+
+		zoom_pt = { cpane_height2, cpane_width2 };
+
+		break;
+	}
+	case ZOOM_AROUND::CURSOR_POSTION:
+	{
+		M_Point comp_mouse_pos = getMouseRelativeToComp();
+
+		dist_to_zoom_pt = {
+			static_cast<double>(-comp_mouse_pos.y),
+			static_cast<double>(-comp_mouse_pos.x),
+		};
+
+		zoom_pt = {
+			static_cast<double>(-view_pos.y + comp_mouse_pos.y),
+			static_cast<double>(-view_pos.x + comp_mouse_pos.x),
+		};
+
+		break;
+	}
+	default:
+		/* exit the function */
+		return;
+	}
+
+	/*
 	if (lround(last_view_pos.y) == actual_view_pos.y)
 	{
-		cpane_mouse_pos.y += abs(last_view_pos.y) - abs(actual_view_pos.y);
+		double float_diff = -last_view_pos.y + actual_view_pos.y;
+
+		dist_to_zoom_pt.y += float_diff;
+		zoom_pt.y += float_diff;
 	}
 
 	if (lround(last_view_pos.x) == actual_view_pos.x)
 	{
-		cpane_mouse_pos.x += abs(last_view_pos.x) - abs(actual_view_pos.x);
+		double float_diff = -last_view_pos.x + actual_view_pos.x;
+
+		dist_to_zoom_pt.x += float_diff;
+		zoom_pt.x += float_diff;
 	}
-
-	DoublePt view_pos = {
-		-(-(comp_mouse_pos.y * (new_zoom / current_zoom)) + cpane_mouse_pos.y),
-		-(-(comp_mouse_pos.x * (new_zoom / current_zoom)) + cpane_mouse_pos.x),
-	};
-
-	/*
-	new_view_pos = {
-		cpane_height / 2 + view_pos.y,
-		cpane_width / 2 + view_pos.x,
-	};
 	*/
 
-	SetFloatZoomFn(view_pano, new_zoom, { 0, 0 }, true, true, false, false, true);
-	setViewPanoPosition({ lround(view_pos.y), lround(view_pos.x) });
+	DoublePt new_view_pos = {
+		-(dist_to_zoom_pt.y * (new_zoom / current_zoom) + zoom_pt.y),
+		-(dist_to_zoom_pt.x * (new_zoom / current_zoom) + zoom_pt.x),
+	};
 
-	last_view_pos = view_pos;
+	SetFloatZoomFn(view_pano, new_zoom, { 0, 0 }, true, true, false, false, true);
+	setViewPanoPosition({ lround(new_view_pos.y), lround(new_view_pos.x) });
+
+	last_view_pos = new_view_pos;
 }
 
