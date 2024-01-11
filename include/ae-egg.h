@@ -1,5 +1,6 @@
 #pragma once
 
+#include <set>
 #include <nlohmann/json.hpp>
 
 class BEE_Project;
@@ -24,13 +25,24 @@ enum FEE_CoordFxType
 };
 
 class CView;
+class CItem;
 class CPanorama;
 class CPanoProjItem;
 class CDirProjItem;
 
 class CEggApp;
 
-typedef void(__stdcall* GetActualPrimaryPreviewItem)(CEggApp*, CPanoProjItem**, CDirProjItem**, BEE_Item**, bool, bool, bool);
+typedef BEE_Item*(__stdcall* GetActiveItem)();
+typedef CItem*(__stdcall* GetCItem)(BEE_Item*, bool);
+typedef CDirProjItem*(__stdcall* GetMRUItemDir)(CItem*);
+typedef CPanoProjItem*(__stdcall* GetMRUItemPano)(CDirProjItem*);
+typedef void(__stdcall* GetActualPrimaryPreviewItem)(CEggApp**, CPanoProjItem**, CDirProjItem**, BEE_Item**, bool, bool, bool);
+typedef void(__stdcall* GetCurrentItem)(CEggApp**, BEE_Item**, CPanoProjItem**);
+typedef CPanoProjItem*(__stdcall* GetPrimaryPreviewPano)(CEggApp*, bool);
+typedef CPanoProjItem*(__stdcall* GetPaintCursorItemPano)(CEggApp*);
+typedef std::vector<CItem*>* (__stdcall* GetOpenedItemList)(__int64, __int64, unsigned __int64*);
+typedef bool(__stdcall* GetPreviewingPanos)(CEggApp*, bool, std::set<CPanoProjItem*>*);
+typedef bool(__stdcall* GetPanosInPreviewSet)(CEggApp*, std::set<CPanoProjItem*>*, bool);
 typedef M_Point(__stdcall* CoordXf)(CPanoProjItem*, M_Point*, FEE_CoordFxType, M_Point);
 typedef M_Point(__stdcall* GetLocalMouse)(CPanoProjItem*, M_Point*);
 typedef void(__stdcall* PointFrameToFloatSource)(CPanoProjItem*, M_Point, M_Vector2T<double>*);
@@ -47,7 +59,17 @@ class AeEgg
 {
 public:
 	CEggApp* gEgg;
+	GetActiveItem GetActiveItemFn;
+	GetCItem GetCItemFn;
+	GetMRUItemDir GetMRUItemDirFn;
+	GetMRUItemPano GetMRUItemPanoFn;
 	GetActualPrimaryPreviewItem GetActualPrimaryPreviewItemFn;
+	GetCurrentItem GetCurrentItemFn;
+	GetPrimaryPreviewPano GetPrimaryPreviewPanoFn;
+	GetPreviewingPanos GetPreviewingPanosFn;
+	GetPanosInPreviewSet GetPanosInPreviewSetFn;
+	GetPaintCursorItemPano GetPaintCursorItemPanoFn;
+	GetOpenedItemList GetOpenedItemListFn;
 	CoordXf CoordXfFn;
 	GetLocalMouse GetLocalMouseFn;
 	PointFrameToFloatSource PointFrameToFloatSourceFn;
@@ -57,6 +79,7 @@ public:
 	DoublePt last_view_pos;
 
 	AeEgg();
+	bool isViewPanoExists();
 	CPanoProjItem* getViewPano();
 	void setViewPanoPosition(LongPt point);
 	LongPt getViewPanoPosition();

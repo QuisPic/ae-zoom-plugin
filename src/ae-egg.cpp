@@ -39,6 +39,16 @@ AeEgg::AeEgg()
 			"?GetActualPrimaryPreviewItem@CEggApp@@QEBAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
 		);
 
+	GetActiveItemFn = getFromAfterFXDll<GetActiveItem>("?NIM_GetActiveItem@@YAPEAVBEE_Item@@XZ");
+	GetCItemFn = getFromAfterFXDll<GetCItem>("?GetCItem@@YAPEAVCItem@@PEAVBEE_Item@@E@Z");
+	GetMRUItemDirFn = getFromAfterFXDll<GetMRUItemDir>("?GetMRUItemDir@CItem@@QEAAPEAVCDirProjItem@@XZ");
+	GetMRUItemPanoFn = getFromAfterFXDll<GetMRUItemPano>("?GetMRUItemPano@CDirProjItem@@QEBAPEAVCPanoProjItem@@XZ");
+	GetCurrentItemFn = getFromAfterFXDll<GetCurrentItem>("?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z");
+	GetPaintCursorItemPanoFn = getFromAfterFXDll<GetPaintCursorItemPano>("?GetPaintCursorItemPano@CEggApp@@QEAAPEAVCPanoProjItem@@XZ");
+	GetOpenedItemListFn = getFromAfterFXDll<GetOpenedItemList>("?GetOpenedItemList@CEggApp@@QEAAPEAV?$vector@PEAVCItem@@V?$allocator@PEAVCItem@@@std@@@std@@V?$basic_string@EU?$char_traits@E@std@@U?$STLAllocator@E@allocator@dvacore@@@3@@Z");
+	GetPrimaryPreviewPanoFn = getFromAfterFXDll<GetPrimaryPreviewPano>("?GetPrimaryPreviewPano@CEggApp@@QEAAPEAVCPanoProjItem@@_N@Z");
+	GetPreviewingPanosFn = getFromAfterFXDll<GetPreviewingPanos>("?GetPreviewingPanos@CEggApp@@QEAA_N_NAEAV?$set@PEAVCPanoProjItem@@U?$less@PEAVCPanoProjItem@@@std@@V?$allocator@PEAVCPanoProjItem@@@3@@std@@@Z");
+	GetPanosInPreviewSetFn = getFromAfterFXDll<GetPanosInPreviewSet>("?GetPanosInPreviewSet@CEggApp@@QEAAXAEAV?$set@PEAVCPanoProjItem@@U?$less@PEAVCPanoProjItem@@@std@@V?$allocator@PEAVCPanoProjItem@@@3@@std@@_N@Z");
 	CoordXfFn = getFromAfterFXDll<CoordXf>("?CoordXf@CView@@QEAA?AUM_Point@@W4FEE_CoordFxType@@U2@@Z");
 	GetLocalMouseFn = getFromAfterFXDll<GetLocalMouse>("?GetLocalMouse@CView@@QEAA?AUM_Point@@XZ");
 	PointFrameToFloatSourceFn = getFromAfterFXDll<PointFrameToFloatSource>("?PointFrameToFloatSource@CPanoProjItem@@QEAAXUM_Point@@PEAV?$M_Vector2T@N@@@Z");
@@ -52,7 +62,27 @@ CPanoProjItem* AeEgg::getViewPano()
 {
 	CPanoProjItem* view_pano = nullptr;
 
-	GetActualPrimaryPreviewItemFn(this->gEgg, &view_pano, nullptr, nullptr, true, true, true);
+	GetCurrentItemFn(&gEgg, nullptr, &view_pano);
+
+	if (!view_pano)
+	{
+		BEE_Item* bee_item = GetActiveItemFn();
+
+		if (bee_item)
+		{
+			CItem* c_item = GetCItemFn(bee_item, false);
+			
+			if (c_item)
+			{
+				CDirProjItem* dir_item = GetMRUItemDirFn(c_item);
+
+				if (dir_item)
+				{
+					view_pano = GetMRUItemPanoFn(dir_item);
+				}
+			}
+		}
+	}
 
 	return view_pano;
 }
@@ -132,6 +162,20 @@ M_Point AeEgg::getMouseRelativeToComp()
 	return pp;
 }
 
+bool AeEgg::isViewPanoExists()
+{
+	CPanoProjItem* view_pano = getViewPano();
+
+	if (view_pano)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
 LongPt AeEgg::getMouseRelativeToViewPano()
 {
 	auto mouse_rel_to_comp = getMouseRelativeToComp();
@@ -146,6 +190,11 @@ LongPt AeEgg::getMouseRelativeToViewPano()
 
 bool AeEgg::isMouseInsideViewPano()
 {
+	if (!isViewPanoExists())
+	{
+		return false;
+	}
+
 	auto mouse_rel_to_view = getMouseRelativeToViewPano();
 	auto view_pano_width = getCPaneWidth();
 	auto view_pano_height = getCPaneHeight();
@@ -160,6 +209,11 @@ bool AeEgg::isMouseInsideViewPano()
 
 void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around)
 {
+	if (!isViewPanoExists())
+	{
+		return;
+	}
+
 	CPanoProjItem* view_pano = getViewPano();
 
 	double current_zoom = GetFloatZoomFn(view_pano);
