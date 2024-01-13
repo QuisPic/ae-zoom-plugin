@@ -167,11 +167,14 @@ std::tuple<A_Err, std::string> RunExtendscript(const std::string& script_str)
 	return { err, result_str };
 }
 
-static A_Err ReadOption(const std::string& key_name, A_char* data_buf)
+template<typename T>
+static A_Err ReadAndStoreSetting(T* storage, const std::string& key, const std::string& exeption_str)
 {
 	A_Err err = A_Err_NONE;
 	AEGP_SuiteHandler	suites(sP);
 	AEGP_PersistentBlobH blobH;
+	constexpr int buf_size = 1000;
+	A_char buf[buf_size];
 	A_Boolean key_exists = false;
 
 	ERR(suites.PersistentDataSuite4()->AEGP_GetApplicationBlob(AEGP_PersistentType_MACHINE_SPECIFIC, &blobH));
@@ -181,7 +184,7 @@ static A_Err ReadOption(const std::string& key_name, A_char* data_buf)
 		ERR(suites.PersistentDataSuite4()->AEGP_DoesKeyExist(
 			blobH,
 			SETTINGS_SECTION_NAME,
-			key_name.c_str(),
+			key.c_str(),
 			&key_exists));
 
 		if (key_exists)
@@ -189,12 +192,23 @@ static A_Err ReadOption(const std::string& key_name, A_char* data_buf)
 			ERR(suites.PersistentDataSuite4()->AEGP_GetString(
 				blobH,
 				SETTINGS_SECTION_NAME,
-				key_name.c_str(),
+				key.c_str(),
 				nullptr,
-				2000,
-				data_buf,
+				buf_size,
+				buf,
 				nullptr
 			));
+
+			try 
+			{
+				json j = json::parse(std::string(buf));
+				T kek = j.get<T>();
+				*storage = kek;
+			}
+			catch (const json::exception& e) 
+			{
+				logger(LOG_LEVEL_ERROR, exeption_str, std::string(e.what()));
+			}
 		}
 	}
 
@@ -204,12 +218,12 @@ static A_Err ReadOption(const std::string& key_name, A_char* data_buf)
 static A_Err ReadExperimentalOptions()
 {
 	A_Err err = A_Err_NONE;
-	A_char experimental_buf[2000];
 
-	ERR(ReadOption("experimental", experimental_buf));
-	json experimental_json = json::parse(std::string(experimental_buf));
-
-	S_experimental_options = experimental_json.get<ExperimentalOptions>();
+	ERR(ReadAndStoreSetting(
+		&S_experimental_options, 
+		"experimental", 
+		"\n\nCan't read Zoom experimental options. Please save the experimental options again using Zoom script.\n")
+	);
 
 	return err;
 }
@@ -217,24 +231,12 @@ static A_Err ReadExperimentalOptions()
 static A_Err ReadKeyBindings()
 {
 	A_Err err = A_Err_NONE;
-	A_char key_bindings_buf[2000];
 
-	if (S_key_bindings.size() > 0)
-	{
-		S_key_bindings.clear();
-	}
-
-	ERR(ReadOption("keyBindings", key_bindings_buf));
-	json key_bindings_json = json::parse(std::string(key_bindings_buf));
-
-	for (const auto& kbind_j : key_bindings_json) {
-		if (!kbind_j["enabled"])
-		{
-			continue;
-		}
-
-		S_key_bindings.emplace_back(kbind_j.get<KeyBindAction>());
-	}
+	ERR(ReadAndStoreSetting(
+		&S_key_bindings, 
+		"keyBindings", 
+		"\n\nCan't read Zoom keybindings. Please save the keybindings again using Zoom script.\n")
+	);
 
 	return err;
 }
