@@ -34,21 +34,11 @@ AeEgg::AeEgg()
 {
 	gEgg = getFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
 
-	GetActualPrimaryPreviewItemFn =
-		getFromAfterFXDll<GetActualPrimaryPreviewItem>(
-			"?GetActualPrimaryPreviewItem@CEggApp@@QEBAXPEAPEAVCPanoProjItem@@PEAPEAVCDirProjItem@@PEAPEAVBEE_Item@@_N33@Z"
-		);
-
 	GetActiveItemFn = getFromAfterFXDll<GetActiveItem>("?NIM_GetActiveItem@@YAPEAVBEE_Item@@XZ");
 	GetCItemFn = getFromAfterFXDll<GetCItem>("?GetCItem@@YAPEAVCItem@@PEAVBEE_Item@@E@Z");
 	GetMRUItemDirFn = getFromAfterFXDll<GetMRUItemDir>("?GetMRUItemDir@CItem@@QEAAPEAVCDirProjItem@@XZ");
 	GetMRUItemPanoFn = getFromAfterFXDll<GetMRUItemPano>("?GetMRUItemPano@CDirProjItem@@QEBAPEAVCPanoProjItem@@XZ");
 	GetCurrentItemFn = getFromAfterFXDll<GetCurrentItem>("?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z");
-	GetPaintCursorItemPanoFn = getFromAfterFXDll<GetPaintCursorItemPano>("?GetPaintCursorItemPano@CEggApp@@QEAAPEAVCPanoProjItem@@XZ");
-	GetOpenedItemListFn = getFromAfterFXDll<GetOpenedItemList>("?GetOpenedItemList@CEggApp@@QEAAPEAV?$vector@PEAVCItem@@V?$allocator@PEAVCItem@@@std@@@std@@V?$basic_string@EU?$char_traits@E@std@@U?$STLAllocator@E@allocator@dvacore@@@3@@Z");
-	GetPrimaryPreviewPanoFn = getFromAfterFXDll<GetPrimaryPreviewPano>("?GetPrimaryPreviewPano@CEggApp@@QEAAPEAVCPanoProjItem@@_N@Z");
-	GetPreviewingPanosFn = getFromAfterFXDll<GetPreviewingPanos>("?GetPreviewingPanos@CEggApp@@QEAA_N_NAEAV?$set@PEAVCPanoProjItem@@U?$less@PEAVCPanoProjItem@@@std@@V?$allocator@PEAVCPanoProjItem@@@3@@std@@@Z");
-	GetPanosInPreviewSetFn = getFromAfterFXDll<GetPanosInPreviewSet>("?GetPanosInPreviewSet@CEggApp@@QEAAXAEAV?$set@PEAVCPanoProjItem@@U?$less@PEAVCPanoProjItem@@@std@@V?$allocator@PEAVCPanoProjItem@@@3@@std@@_N@Z");
 	CoordXfFn = getFromAfterFXDll<CoordXf>("?CoordXf@CView@@QEAA?AUM_Point@@W4FEE_CoordFxType@@U2@@Z");
 	GetLocalMouseFn = getFromAfterFXDll<GetLocalMouse>("?GetLocalMouse@CView@@QEAA?AUM_Point@@XZ");
 	PointFrameToFloatSourceFn = getFromAfterFXDll<PointFrameToFloatSource>("?PointFrameToFloatSource@CPanoProjItem@@QEAAXUM_Point@@PEAV?$M_Vector2T@N@@@Z");
