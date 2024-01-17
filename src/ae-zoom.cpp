@@ -742,6 +742,8 @@ A_Err EntryPointFunc(
 		ERR(ReadKeyBindings());
 		ERR(ReadExperimentalOptions());
 
+		S_ae_egg = AeEgg(major_versionL); // change
+
 		// Start hook thread
 		StartIOHook();
 

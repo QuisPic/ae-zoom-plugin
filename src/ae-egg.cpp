@@ -1,21 +1,59 @@
-#include "ae-zoom.h"
 #include "ae-egg.h"
 #include "mangled-names/mangled-names.h"
 
 #ifdef AE_OS_WIN
+static std::string GetLastWindowsErrorStr()
+{
+	// Retrieve the system error message for the last-error code
+
+	std::string result;
+	LPVOID lpMsgBuf;
+	DWORD dw = GetLastError();
+
+	DWORD message_length = FormatMessage(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER |
+		FORMAT_MESSAGE_FROM_SYSTEM |
+		FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL,
+		dw,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPTSTR)&lpMsgBuf,
+		0, NULL);
+
+	if (message_length != 0)
+	{
+		result = std::string(static_cast<char*>(lpMsgBuf));
+	}
+
+	LocalFree(lpMsgBuf);
+
+	return result;
+}
+
 template <typename T>
 T getFromAfterFXDll(const std::string& fn_name)
 {
+	T result = nullptr;
 	HINSTANCE hDLL = LoadLibrary("AfterFXLib.dll");
 
 	if (!hDLL) {
-		logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.dll", "");
-		return nullptr;
+		auto winapi_error = GetLastWindowsErrorStr();
+		logger(LOG_LEVEL_ERROR, "\n\nFailed to load AfterFXLib.dll\n", winapi_error);
+	}
+	else
+	{
+		result = reinterpret_cast<T>(GetProcAddress(hDLL, fn_name.c_str()));
+
+		if (!result)
+		{
+			auto winapi_error = GetLastWindowsErrorStr();
+			const std::string  error_string = "\n\nCan't find symbol " + fn_name + " in AfterFXLib.dll\n";
+			logger(LOG_LEVEL_ERROR, error_string, winapi_error);
+		}
+
+		FreeLibrary(hDLL);
 	}
 
-	T result = reinterpret_cast<T>(GetProcAddress(hDLL, fn_name.c_str()));
-
-	FreeLibrary(hDLL);
 	return result;
 }
 #endif
@@ -24,7 +62,7 @@ T getFromAfterFXDll(const std::string& fn_name)
 template <typename T>
 T getFromAfterFXDll(const std::string& fn_name)
 {
-    void* handle = dlopen("AfterFXLib.framework/Versions/A/AfterFXLib", RTLD_LAZY);
+    void* handle = dlopen("AfterFXLib.framework/AfterFXLib", RTLD_LAZY);
 
     if (!handle) {
         logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.framework", std::string(dlerror()));
@@ -50,24 +88,18 @@ T getFromAfterFXDll(const std::string& fn_name)
 
 AeEgg::AeEgg(A_long ae_major_version)
 {
-#ifdef AE_OS_WIN
-	// gEgg = getFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
 	gEgg = getFromAfterFXDll<CEggApp*>(MangledNames::gEgg(ae_major_version));
 
-	GetActiveItemFn = getFromAfterFXDll<GetActiveItem>("?NIM_GetActiveItem@@YAPEAVBEE_Item@@XZ");
-	GetCItemFn = getFromAfterFXDll<GetCItem>("?GetCItem@@YAPEAVCItem@@PEAVBEE_Item@@E@Z");
-	GetMRUItemDirFn = getFromAfterFXDll<GetMRUItemDir>("?GetMRUItemDir@CItem@@QEAAPEAVCDirProjItem@@XZ");
-	GetMRUItemPanoFn = getFromAfterFXDll<GetMRUItemPano>("?GetMRUItemPano@CDirProjItem@@QEBAPEAVCPanoProjItem@@XZ");
-	GetCurrentItemFn = getFromAfterFXDll<GetCurrentItem>("?GetCurrentItem@CEggApp@@QEAAXPEAPEAVBEE_Item@@PEAPEAVCPanoProjItem@@@Z");
-	CoordXfFn = getFromAfterFXDll<CoordXf>("?CoordXf@CView@@QEAA?AUM_Point@@W4FEE_CoordFxType@@U2@@Z");
-	GetLocalMouseFn = getFromAfterFXDll<GetLocalMouse>("?GetLocalMouse@CView@@QEAA?AUM_Point@@XZ");
-	PointFrameToFloatSourceFn = getFromAfterFXDll<PointFrameToFloatSource>("?PointFrameToFloatSource@CPanoProjItem@@QEAAXUM_Point@@PEAV?$M_Vector2T@N@@@Z");
-	SetFloatZoomFn = getFromAfterFXDll<SetFloatZoom>("?SetFloatZoom@CPanoProjItem@@QEAAXNULongPt@@EEEEE@Z");
-	GetFloatZoomFn = getFromAfterFXDll<GetFloatZoom>("?GetFloatZoom@CPanoProjItem@@QEAANXZ");
-#elif defined AE_OS_MAC
-    GetActiveItemFn = getFromAfterFXDll<GetActiveItem>("_Z17NIM_GetActiveItemv");
-    GetCItemFn = getFromAfterFXDll<GetCItem>("_Z8GetCItemP8BEE_Itemh");
-#endif
+	GetActiveItemFn = getFromAfterFXDll<GetActiveItem>(MangledNames::GetActiveItem(ae_major_version));
+	GetCItemFn = getFromAfterFXDll<GetCItem>(MangledNames::GetCItem(ae_major_version));
+	GetMRUItemDirFn = getFromAfterFXDll<GetMRUItemDir>(MangledNames::GetMRUItemDir(ae_major_version));
+	GetMRUItemPanoFn = getFromAfterFXDll<GetMRUItemPano>(MangledNames::GetMRUItemPano(ae_major_version));
+	GetCurrentItemFn = getFromAfterFXDll<GetCurrentItem>(MangledNames::GetCurrentItem(ae_major_version));
+	CoordXfFn = getFromAfterFXDll<CoordXf>(MangledNames::CoordXf(ae_major_version));
+	GetLocalMouseFn = getFromAfterFXDll<GetLocalMouse>(MangledNames::GetLocalMouse(ae_major_version));
+	PointFrameToFloatSourceFn = getFromAfterFXDll<PointFrameToFloatSource>(MangledNames::PointFrameToFloatSource(ae_major_version));
+	SetFloatZoomFn = getFromAfterFXDll<SetFloatZoom>(MangledNames::SetFloatZoom(ae_major_version));
+	GetFloatZoomFn = getFromAfterFXDll<GetFloatZoom>(MangledNames::GetFloatZoom(ae_major_version));
 
 	last_view_pos = { 999999.0, 999999.0 };
 }
@@ -295,24 +327,6 @@ void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around)
 		/* exit the function */
 		return;
 	}
-
-	/*
-	if (lround(last_view_pos.y) == actual_view_pos.y)
-	{
-		double float_diff = -last_view_pos.y + actual_view_pos.y;
-
-		dist_to_zoom_pt.y += float_diff;
-		zoom_pt.y += float_diff;
-	}
-
-	if (lround(last_view_pos.x) == actual_view_pos.x)
-	{
-		double float_diff = -last_view_pos.x + actual_view_pos.x;
-
-		dist_to_zoom_pt.x += float_diff;
-		zoom_pt.x += float_diff;
-	}
-	*/
 
 	DoublePt new_view_pos = {
 		-(dist_to_zoom_pt.y * (new_zoom / current_zoom) + zoom_pt.y),

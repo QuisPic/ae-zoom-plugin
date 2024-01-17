@@ -28,6 +28,8 @@
 #include <uiohook.h>
 #include <nlohmann/json.hpp>
 
+#include "logger.h"
+
 using json = nlohmann::json;
 
 #define AEGP_MAX_STREAM_DIM 4
@@ -149,17 +151,6 @@ public:
 		: keyCodes(keyCodes), action(action), amount(amount)
 	{}
 };
-
-void logger(
-	unsigned int,
-	std::tuple<std::string, std::string>
-);
-
-void logger(
-	unsigned int,
-	const std::string&,
-	const std::string&
-);
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(KeyCodes, type, mask, keycode);
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(KeyBindAction, keyCodes, action, amount);
