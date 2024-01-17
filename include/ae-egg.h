@@ -63,9 +63,9 @@ enum class ZOOM_AROUND
 
 class AeEgg
 {
-public:
+private:
+	A_long ae_major_version;
     DoublePt last_view_pos;
-    
 	CEggApp* gEgg;
     GetActiveItem GetActiveItemFn;
 	GetCItem GetCItemFn;
@@ -87,6 +87,8 @@ public:
 	M_Point ScreenToCompMouse(POINT screen_p);
 	M_Point getMouseRelativeToComp();
 	LongPt getMouseRelativeToViewPano();
+
+public:
 	bool isMouseInsideViewPano();
 	void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
 

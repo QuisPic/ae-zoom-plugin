@@ -86,7 +86,8 @@ T getFromAfterFXDll(const std::string& fn_name)
 }
 #endif
 
-AeEgg::AeEgg(A_long ae_major_version)
+AeEgg::AeEgg(A_long ae_major_version) :
+	ae_major_version(ae_major_version), last_view_pos{ 999999.0, 999999.0 }
 {
 	gEgg = getFromAfterFXDll<CEggApp*>(MangledNames::gEgg(ae_major_version));
 
@@ -100,8 +101,6 @@ AeEgg::AeEgg(A_long ae_major_version)
 	PointFrameToFloatSourceFn = getFromAfterFXDll<PointFrameToFloatSource>(MangledNames::PointFrameToFloatSource(ae_major_version));
 	SetFloatZoomFn = getFromAfterFXDll<SetFloatZoom>(MangledNames::SetFloatZoom(ae_major_version));
 	GetFloatZoomFn = getFromAfterFXDll<GetFloatZoom>(MangledNames::GetFloatZoom(ae_major_version));
-
-	last_view_pos = { 999999.0, 999999.0 };
 }
 
 #ifdef AE_OS_WIN
