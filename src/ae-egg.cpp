@@ -1,9 +1,10 @@
 #include "ae-zoom.h"
 #include "ae-egg.h"
+#include "mangled-names/mangled-names.h"
 
 #ifdef AE_OS_WIN
 template <typename T>
-T getFromAfterFXDll(std::string fn_name)
+T getFromAfterFXDll(const std::string& fn_name)
 {
 	HINSTANCE hDLL = LoadLibrary("AfterFXLib.dll");
 
@@ -19,20 +20,39 @@ T getFromAfterFXDll(std::string fn_name)
 }
 #endif
 
-static inline M_Point PointToMPoint(POINT p)
+#ifdef AE_OS_MAC
+template <typename T>
+T getFromAfterFXDll(const std::string& fn_name)
 {
-	return M_Point{ static_cast<short>(p.y), static_cast<short>(p.x) };
-}
+    void* handle = dlopen("AfterFXLib.framework/Versions/A/AfterFXLib", RTLD_LAZY);
 
-template <typename T> 
-T getVirtualFn(long long* base_addr, int offset)
-{
-	return reinterpret_cast<T>(*base_addr + offset);
-}
+    if (!handle) {
+        logger(LOG_LEVEL_ERROR, "Failed to load AfterFXLib.framework", std::string(dlerror()));
+        return nullptr;
+    }
 
-AeEgg::AeEgg()
+    dlerror(); // reset errors
+    T result = reinterpret_cast<T>(dlsym(handle, fn_name.c_str()));
+    
+    const char* dlsym_error = dlerror();
+    
+    if (dlsym_error)
+    {
+        logger(LOG_LEVEL_ERROR, "Cannot load symbol " + fn_name, std::string(dlsym_error));
+        dlclose(handle);
+        return nullptr;
+    }
+
+    dlclose(handle);
+    return result;
+}
+#endif
+
+AeEgg::AeEgg(A_long ae_major_version)
 {
-	gEgg = getFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
+#ifdef AE_OS_WIN
+	// gEgg = getFromAfterFXDll<CEggApp*>("?gEgg@@3PEAVCEggApp@@EA");
+	gEgg = getFromAfterFXDll<CEggApp*>(MangledNames::gEgg(ae_major_version));
 
 	GetActiveItemFn = getFromAfterFXDll<GetActiveItem>("?NIM_GetActiveItem@@YAPEAVBEE_Item@@XZ");
 	GetCItemFn = getFromAfterFXDll<GetCItem>("?GetCItem@@YAPEAVCItem@@PEAVBEE_Item@@E@Z");
@@ -44,9 +64,26 @@ AeEgg::AeEgg()
 	PointFrameToFloatSourceFn = getFromAfterFXDll<PointFrameToFloatSource>("?PointFrameToFloatSource@CPanoProjItem@@QEAAXUM_Point@@PEAV?$M_Vector2T@N@@@Z");
 	SetFloatZoomFn = getFromAfterFXDll<SetFloatZoom>("?SetFloatZoom@CPanoProjItem@@QEAAXNULongPt@@EEEEE@Z");
 	GetFloatZoomFn = getFromAfterFXDll<GetFloatZoom>("?GetFloatZoom@CPanoProjItem@@QEAANXZ");
+#elif defined AE_OS_MAC
+    GetActiveItemFn = getFromAfterFXDll<GetActiveItem>("_Z17NIM_GetActiveItemv");
+    GetCItemFn = getFromAfterFXDll<GetCItem>("_Z8GetCItemP8BEE_Itemh");
+#endif
 
 	last_view_pos = { 999999.0, 999999.0 };
 }
+
+#ifdef AE_OS_WIN
+static inline M_Point PointToMPoint(POINT p)
+{
+    return M_Point{ static_cast<short>(p.y), static_cast<short>(p.x) };
+}
+
+template <typename T>
+T getVirtualFn(long long* base_addr, int offset)
+{
+    return reinterpret_cast<T>(*base_addr + offset);
+}
+
 
 CPanoProjItem* AeEgg::getViewPano()
 {
@@ -287,4 +324,14 @@ void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around)
 
 	last_view_pos = new_view_pos;
 }
+#elif defined AE_OS_MAC
+void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around)
+{
+    return;
+}
 
+bool AeEgg::isMouseInsideViewPano()
+{
+    return true;
+}
+#endif

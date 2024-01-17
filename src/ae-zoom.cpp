@@ -171,8 +171,8 @@ template<typename T>
 static A_Err ReadAndStoreSetting(T* storage, const std::string& key, const std::string& exeption_str)
 {
 	A_Err err = A_Err_NONE;
-	AEGP_SuiteHandler	suites(sP);
-	AEGP_PersistentBlobH blobH;
+	AEGP_SuiteHandler suites(sP);
+	AEGP_PersistentBlobH blobH = nullptr;
 	constexpr int buf_size = 1000;
 	A_char buf[buf_size];
 	A_Boolean key_exists = false;
@@ -653,25 +653,16 @@ static A_Err CommandHook(
 
 	if (command == hack_cmd)
 	{
-		// S_ae_egg.moveViewPanoTo({ 1, 1 });
-
 		AEGP_SuiteHandler	suites(sP);
-		POINT cursor_pos;
-
-		GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
-
-		CPanoProjItem* view_pano = S_ae_egg.getViewPano();
-		// M_Vector2T<double> cursor_vec = { static_cast<double>(cursor_pos.y), static_cast<double>(cursor_pos.x) };
-		M_Vector2T<double> cursor_vec = { 0, 0 };
-		// S_ae_egg.SetFloatZoomFn(view_pano, 2, { 100, 100 }, true, true, false, false, true);
-
-		//LongPt pano_pos = S_ae_egg.getViewPanoPosition();
-		M_Point pano_origin = S_ae_egg.ScreenToCompMouse(cursor_pos);
-
-		//M_Point local_mouse;
-		//S_ae_egg.GetLocalMouseFn(view_pano, &local_mouse);
-
-		std::string msg_str = "X: " + std::to_string(pano_origin.x) + ", Y: " + std::to_string(pano_origin.y);
+        BEE_Item* bee_item = nullptr;
+        std::string msg_str = "nooooo";
+        
+        bee_item = S_ae_egg.GetActiveItemFn();
+        
+        if (bee_item)
+        {
+            msg_str = "yeeeeeeeaaas";
+        }
 
 		suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
 
@@ -726,7 +717,6 @@ A_Err EntryPointFunc(
 	AEGP_GlobalRefcon		*global_refconP)	/* << */
 {
 	A_Err err = A_Err_NONE;
-	A_Err err2 = A_Err_NONE;
 
 	try {
 		sP = pica_basicP;
@@ -735,9 +725,7 @@ A_Err EntryPointFunc(
 		S_call_idle_routines = suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
 
 		ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&hack_cmd));
-
 		ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(hack_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION, AEGP_MENU_INSERT_AT_BOTTOM));
-
 		ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
 
 		ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(S_zoom_id, UpdateMenuHook, 0));

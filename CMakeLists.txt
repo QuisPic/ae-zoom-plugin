@@ -24,12 +24,21 @@ FetchContent_Declare(
 	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/json)
 
 # Fetch uiohook library
+if ( WIN32 )
 FetchContent_Declare(
 	uiohook 
 	GIT_REPOSITORY https://github.com/kwhat/libuiohook.git
 	GIT_TAG 1.3
-	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/uiohook
+	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/uiohook-win
 )
+elseif ( APPLE )
+FetchContent_Declare(
+	uiohook 
+	GIT_REPOSITORY https://github.com/kwhat/libuiohook.git
+	GIT_TAG 1.3
+	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/uiohook-mac
+)
+endif()
 
 FetchContent_MakeAvailable(json uiohook)
 
@@ -38,7 +47,7 @@ add_subdirectory(extern)
 add_library(
 	${PROJECT_NAME}
 	MODULE
-	"src/ae-zoom.cpp" "src/ae-egg.cpp")
+	"src/ae-zoom.cpp" "src/ae-egg.cpp" "src/mangled-names/mangled-names.h" "src/mangled-names/mangled-names-win.cpp" "src/mangled-names/mangled-names-mac.cpp")
 
 target_include_directories(
 	${PROJECT_NAME}

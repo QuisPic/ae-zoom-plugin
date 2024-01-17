@@ -2,6 +2,11 @@
 
 #include <set>
 #include <nlohmann/json.hpp>
+#include "AEConfig.h"
+
+#ifdef AE_OS_MAC
+#include <dlfcn.h>
+#endif
 
 class BEE_Project;
 class BEE_Item;
@@ -52,8 +57,12 @@ enum class ZOOM_AROUND
 class AeEgg
 {
 public:
+    AeEgg();
+    AeEgg(A_long ae_major_version);
+    DoublePt last_view_pos;
+    
 	CEggApp* gEgg;
-	GetActiveItem GetActiveItemFn;
+    GetActiveItem GetActiveItemFn;
 	GetCItem GetCItemFn;
 	GetMRUItemDir GetMRUItemDirFn;
 	GetMRUItemPano GetMRUItemPanoFn;
@@ -64,9 +73,6 @@ public:
 	SetFloatZoom SetFloatZoomFn;
 	GetFloatZoom GetFloatZoomFn;
 
-	DoublePt last_view_pos;
-
-	AeEgg();
 	bool isViewPanoExists();
 	CPanoProjItem* getViewPano();
 	void setViewPanoPosition(LongPt point);
@@ -78,6 +84,9 @@ public:
 	LongPt getMouseRelativeToViewPano();
 	bool isMouseInsideViewPano();
 	void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
+    
+    bool isMouseInsideViewPano();
+    void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
 };
 
 struct ViewPositionExperimentalOption
