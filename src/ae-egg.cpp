@@ -86,21 +86,58 @@ T getFromAfterFXDll(const std::string& fn_name)
 }
 #endif
 
-AeEgg::AeEgg(A_long ae_major_version) :
-	ae_major_version(ae_major_version), last_view_pos{ 999999.0, 999999.0 }
+void AeEgg::ExternalSymbols::load(A_long ae_major_version)
 {
-	gEgg = getFromAfterFXDll<CEggApp*>(MangledNames::gEgg(ae_major_version));
+	mLoadingState = SYMBOLS_LOADING_STATE::LOADING;
 
-	GetActiveItemFn = getFromAfterFXDll<GetActiveItem>(MangledNames::GetActiveItem(ae_major_version));
-	GetCItemFn = getFromAfterFXDll<GetCItem>(MangledNames::GetCItem(ae_major_version));
-	GetMRUItemDirFn = getFromAfterFXDll<GetMRUItemDir>(MangledNames::GetMRUItemDir(ae_major_version));
-	GetMRUItemPanoFn = getFromAfterFXDll<GetMRUItemPano>(MangledNames::GetMRUItemPano(ae_major_version));
-	GetCurrentItemFn = getFromAfterFXDll<GetCurrentItem>(MangledNames::GetCurrentItem(ae_major_version));
-	CoordXfFn = getFromAfterFXDll<CoordXf>(MangledNames::CoordXf(ae_major_version));
-	GetLocalMouseFn = getFromAfterFXDll<GetLocalMouse>(MangledNames::GetLocalMouse(ae_major_version));
-	PointFrameToFloatSourceFn = getFromAfterFXDll<PointFrameToFloatSource>(MangledNames::PointFrameToFloatSource(ae_major_version));
-	SetFloatZoomFn = getFromAfterFXDll<SetFloatZoom>(MangledNames::SetFloatZoom(ae_major_version));
-	GetFloatZoomFn = getFromAfterFXDll<GetFloatZoom>(MangledNames::GetFloatZoom(ae_major_version));
+	loadExternalSymbol<CEggApp*>(gEgg, MangledNames::gEgg(ae_major_version));
+	loadExternalSymbol<GetActiveItem>(GetActiveItemFn, MangledNames::GetActiveItem(ae_major_version));
+	loadExternalSymbol<GetCItem>(GetCItemFn, MangledNames::GetCItem(ae_major_version));
+	loadExternalSymbol<GetMRUItemDir>(GetMRUItemDirFn, MangledNames::GetMRUItemDir(ae_major_version));
+	loadExternalSymbol<GetMRUItemPano>(GetMRUItemPanoFn, MangledNames::GetMRUItemPano(ae_major_version));
+	loadExternalSymbol<GetCurrentItem>(GetCurrentItemFn, MangledNames::GetCurrentItem(ae_major_version));
+	loadExternalSymbol<CoordXf>(CoordXfFn, MangledNames::CoordXf(ae_major_version));
+	loadExternalSymbol<GetLocalMouse>(GetLocalMouseFn, MangledNames::GetLocalMouse(ae_major_version));
+	loadExternalSymbol<PointFrameToFloatSource>(PointFrameToFloatSourceFn, MangledNames::PointFrameToFloatSource(ae_major_version));
+	loadExternalSymbol<SetFloatZoom>(SetFloatZoomFn, MangledNames::SetFloatZoom(ae_major_version));
+	loadExternalSymbol<GetFloatZoom>(GetFloatZoomFn, MangledNames::GetFloatZoom(ae_major_version));
+
+	if (mLoadingState != SYMBOLS_LOADING_STATE::SOME_NOT_LOADED)
+	{
+		mLoadingState = SYMBOLS_LOADING_STATE::ALL_LOADED;
+	}
+}
+
+template<typename T>
+void AeEgg::ExternalSymbols::loadExternalSymbol(const T& symbol_storage, const std::string& symbol_name)
+{
+	// if the previous symbol wasn't found then cancel searching for the next one
+	if (mLoadingState == SYMBOLS_LOADING_STATE::SOME_NOT_LOADED)
+	{
+		return;
+	}
+
+	symbol_storage = getFromAfterFXDll<T>(symbol_name);
+
+	if (symbol_storage == nullptr)
+	{
+		mLoadingState = SYMBOLS_LOADING_STATE::SOME_NOT_LOADED;
+	}
+}
+
+bool AeEgg::loadExternalSymbols()
+{
+	switch (mExSymbols.mLoadingState)
+	{
+	case ExternalSymbols::SYMBOLS_LOADING_STATE::ALL_LOADED:
+		return true;
+	case ExternalSymbols::SYMBOLS_LOADING_STATE::NOT_LOADED:
+		mExSymbols.load(ae_major_version);
+		loadExternalSymbols();
+		break;
+	default:
+		return false;
+	}
 }
 
 #ifdef AE_OS_WIN

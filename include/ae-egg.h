@@ -64,19 +64,42 @@ enum class ZOOM_AROUND
 class AeEgg
 {
 private:
-	A_long ae_major_version;
-    DoublePt last_view_pos;
-	CEggApp* gEgg;
-    GetActiveItem GetActiveItemFn;
-	GetCItem GetCItemFn;
-	GetMRUItemDir GetMRUItemDirFn;
-	GetMRUItemPano GetMRUItemPanoFn;
-	GetCurrentItem GetCurrentItemFn;
-	CoordXf CoordXfFn;
-	GetLocalMouse GetLocalMouseFn;
-	PointFrameToFloatSource PointFrameToFloatSourceFn;
-	SetFloatZoom SetFloatZoomFn;
-	GetFloatZoom GetFloatZoomFn;
+	class ExternalSymbols
+	{
+	public:
+		enum class SYMBOLS_LOADING_STATE
+		{
+			NOT_LOADED,
+			LOADING,
+			SOME_NOT_LOADED,
+			ALL_LOADED,
+		};
+
+		SYMBOLS_LOADING_STATE mLoadingState = SYMBOLS_LOADING_STATE::NOT_LOADED;
+
+		ExternalSymbols() = default;
+		void load(A_long ae_major_version);
+
+	private:
+		CEggApp* gEgg = nullptr;
+		GetActiveItem GetActiveItemFn = nullptr;
+		GetCItem GetCItemFn = nullptr;
+		GetMRUItemDir GetMRUItemDirFn = nullptr;
+		GetMRUItemPano GetMRUItemPanoFn = nullptr;
+		GetCurrentItem GetCurrentItemFn = nullptr;
+		CoordXf CoordXfFn = nullptr;
+		GetLocalMouse GetLocalMouseFn = nullptr;
+		PointFrameToFloatSource PointFrameToFloatSourceFn = nullptr;
+		SetFloatZoom SetFloatZoomFn = nullptr;
+		GetFloatZoom GetFloatZoomFn = nullptr;
+
+		template<typename T>
+		void loadExternalSymbol(const T& symbol_storage, const std::string& symbol_name);
+	};
+
+	AeEgg::ExternalSymbols mExSymbols;
+	DoublePt last_view_pos = { 999999.0, 999999.0 };
+	A_long ae_major_version = 0;
 
 	bool isViewPanoExists();
 	CPanoProjItem* getViewPano();
@@ -88,13 +111,18 @@ private:
 	M_Point getMouseRelativeToComp();
 	LongPt getMouseRelativeToViewPano();
 
+	bool loadExternalSymbols();
+
 public:
 	bool isMouseInsideViewPano();
 	void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
 
 	AeEgg() = default;
-    AeEgg(A_long ae_major_version);
+	AeEgg(A_long ae_major_version) :
+		ae_major_version(ae_major_version)
+	{};
 };
+
 
 struct ViewPositionExperimentalOption
 {
