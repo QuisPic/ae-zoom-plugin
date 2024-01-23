@@ -1,8 +1,7 @@
 #pragma once
 
 #include <string>
-#include <AE_GeneralPlug.h>
-#include "AEConfig.h"
+#include <A.h>
 
 class MangledNames
 {
