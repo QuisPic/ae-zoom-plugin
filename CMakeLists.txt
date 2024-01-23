@@ -63,11 +63,21 @@ if( WIN32 )
 		STRING
 		"After Effects Plugin folder"
 	)
+  
+  if (MSVC)
+    set(MSVC_COMPILER "cl")
+  else()
+    execute_process(
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/sh/find-msvc-compiler.bat
+      OUTPUT_VARIABLE MSVC_COMPILER
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+  endif()
 
 	add_custom_command(
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
 		COMMAND
-		cl /I \"${AESDK_ROOT}/Headers\" /EP \"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\" > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
+    "${MSVC_COMPILER}" /I \"${AESDK_ROOT}/Headers\" /EP \"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\" > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
 	)
 
 	add_custom_command(
@@ -79,7 +89,7 @@ if( WIN32 )
 	add_custom_command(
 		DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
-		COMMAND cl /D "MSWindows" /EP ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
+		COMMAND "${MSVC_COMPILER}" /D "MSWindows" /EP ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
 	)
 	target_sources(
 		${PROJECT_NAME} PRIVATE

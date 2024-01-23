@@ -19,7 +19,7 @@ set( AESDK_ROOT ${PROJECT_SOURCE_DIR} CACHE INTERNAL "After Effects SDK Root")
 
 set( AESDK_INCLUDE
 	${PROJECT_SOURCE_DIR}/Headers
-	${PROJECT_SOURCE_DIR}/Headers/SP
+  ${PROJECT_SOURCE_DIR}/Headers/SP
 	${PROJECT_SOURCE_DIR}/Util
 	${PROJECT_SOURCE_DIR}/Resources
 	CACHE INTERNAL "After Effects SDK Header folders"
@@ -27,7 +27,7 @@ set( AESDK_INCLUDE
 
 target_include_directories(
 	AESDK
-	PUBLIC
+  PUBLIC
 	${AESDK_INCLUDE}
 )
 
@@ -51,7 +51,7 @@ elseif( APPLE )
 endif()
 
 
-if(MSVC)
+if( WIN32 )
 	add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 	add_definitions(-D_WINDOWS)
 endif()
