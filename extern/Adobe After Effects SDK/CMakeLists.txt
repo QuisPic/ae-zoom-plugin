@@ -50,8 +50,6 @@ elseif( APPLE )
 	find_program( AFX_REZ rez /Developer/Tools )
 endif()
 
-
 if( WIN32 )
-	add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-	add_definitions(-D_WINDOWS)
+  target_compile_definitions(AESDK PUBLIC _CRT_SECURE_NO_WARNINGS _WINDOWS)
 endif()
