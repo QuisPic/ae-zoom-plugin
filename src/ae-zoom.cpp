@@ -16,10 +16,6 @@
 #include <objc/objc-runtime.h>
 #endif
 
-#ifdef AE_OS_MAC
-#include <objc/objc-runtime.h>
-#endif
-
 /* Macros for reading a file to a string at compile time */
 #define STRINGIFY(...) #__VA_ARGS__
 #define STR(...) STRINGIFY(__VA_ARGS__)
