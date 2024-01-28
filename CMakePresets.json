@@ -17,6 +17,23 @@
       "vendor": { "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": { "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}" } }
     },
     {
+      "name": "linux-to-windows-debug",
+      "displayName": "Linux Target Windows Debug",
+      "description": "Target Windows from Linux.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Debug" ,
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/mingw-w64-x86_64.cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
       "name": "macos-debug",
       "displayName": "macOS Debug",
       "description": "Target a remote macOS system.",

@@ -64,32 +64,74 @@ if( WIN32 )
 		"After Effects Plugin folder"
 	)
   
-  if (MSVC)
-    set(MSVC_COMPILER "cl")
-  else()
-    execute_process(
-      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/sh/find-msvc-compiler.bat
-      OUTPUT_VARIABLE MSVC_COMPILER
-      OUTPUT_STRIP_TRAILING_WHITESPACE
+  set(
+    CMD_GENERATE_RRC
+    ${AFX_REZ} ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
+  )
+
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(
+      CMD_GENERATE_RR 
+      "\"${CMAKE_CXX_COMPILER}\" /I \"${AESDK_ROOT}/Headers\" /EP \"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\" > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr"
+    )
+    
+    set(
+      CMD_GENERATE_RC
+      "\"${CMAKE_CXX_COMPILER}\" /D "MSWindows" /EP ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc"
+    )
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    
+    set(
+      CMD_GENERATE_RR 
+      ${CMAKE_CXX_COMPILER} -I ${AESDK_ROOT}/Headers -E -P -x c ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r -o ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
+    )
+    
+    if (CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE)  # This currently only works on Windows Subsystem for Linux (WSL)
+      execute_process(
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/sh/check-if-wsl.sh
+        OUTPUT_VARIABLE IS_WSL
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+      )
+
+      if (IS_WSL)
+        execute_process(
+          COMMAND wslpath -m "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr"
+          OUTPUT_VARIABLE RR_WIN_PATH
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        
+        set(RRC_WIN_PATH "${RR_WIN_PATH}c")
+        
+        set(
+          CMD_GENERATE_RRC
+          ${AFX_REZ} ${RR_WIN_PATH} ${RRC_WIN_PATH}
+        )
+      else()
+        message(FATAL_ERROR "Not inside WSL. Running PiPLtool.exe is required for the build. Only WSL is currently supported.")
+      endif()
+    endif()
+    
+    set(
+      CMD_GENERATE_RC
+      ${CMAKE_CXX_COMPILER} -D 'MSWindows' -E -P -x c ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc -o ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
     )
   endif()
 
 	add_custom_command(
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
-		COMMAND
-    "${MSVC_COMPILER}" /I \"${AESDK_ROOT}/Headers\" /EP \"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\" > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
+		COMMAND ${CMD_GENERATE_RR}
 	)
 
 	add_custom_command(
 		DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
-		COMMAND ${AFX_REZ} ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
+    COMMAND ${CMD_GENERATE_RRC}
 	)
 
 	add_custom_command(
 		DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
 		OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
-		COMMAND "${MSVC_COMPILER}" /D "MSWindows" /EP ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
+    COMMAND ${CMD_GENERATE_RC}
 	)
 	target_sources(
 		${PROJECT_NAME} PRIVATE
