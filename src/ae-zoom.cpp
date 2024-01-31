@@ -593,16 +593,8 @@ static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
 
   if (command == hack_cmd) {
     AEGP_SuiteHandler suites(sP);
-    BEE_Item *bee_item = nullptr;
-    std::string msg_str = "nooooo";
 
-    bee_item = S_ae_egg.GetActiveItemFn();
-
-    if (bee_item) {
-      msg_str = "yeeeeeeeaaas";
-    }
-
-    suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
+    // suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
 
     *handledPB = true;
   }
