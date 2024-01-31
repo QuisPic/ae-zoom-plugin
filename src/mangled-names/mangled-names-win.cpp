@@ -1,3 +1,6 @@
+#include "AEConfig.h"
+#include "mangled-names.h"
+
 #ifdef AE_OS_WIN
 const std::string MangledNames::gEgg(const A_long major_version) {
   switch (major_version) {
