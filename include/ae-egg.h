@@ -1,7 +1,7 @@
 #pragma once
 
-#include "AEConfig.h"
 #include "A.h"
+#include "AEConfig.h"
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <uiohook.h>
@@ -63,53 +63,50 @@ typedef double(__stdcall *GetFloatZoom)(CPanoProjItem *);
 
 enum class ZOOM_AROUND { PANEL_CENTER, CURSOR_POSTION };
 
-class AeEgg {
-private:
-  class ExternalSymbols {
-  private:
-    struct SymbolPointers {
-      CEggApp *gEgg = nullptr;
-      GetActiveItem GetActiveItemFn = nullptr;
-      GetCItem GetCItemFn = nullptr;
-      GetMRUItemDir GetMRUItemDirFn = nullptr;
-      GetMRUItemPano GetMRUItemPanoFn = nullptr;
-      GetCurrentItem GetCurrentItemFn = nullptr;
-      CoordXf CoordXfFn = nullptr;
-      GetLocalMouse GetLocalMouseFn = nullptr;
-      PointFrameToFloatSource PointFrameToFloatSourceFn = nullptr;
-      SetFloatZoom SetFloatZoomFn = nullptr;
-      GetFloatZoom GetFloatZoomFn = nullptr;
-    };
-
-    SymbolPointers mSymbols;
-    A_long ae_major_version = 0;
-
-    template <typename T>
-    bool loadExternalSymbol(T &symbol_storage, const std::string &symbol_name);
-
-  public:
-    enum class SYMBOLS_LOADING_STATE {
-      NOT_LOADED,
-      LOADING,
-      SOME_NOT_LOADED,
-      ALL_LOADED,
-    };
-
-    SYMBOLS_LOADING_STATE mLoadingState = SYMBOLS_LOADING_STATE::NOT_LOADED;
-
-    ExternalSymbols() = default;
-    ExternalSymbols(A_long ae_major_version)
-        : ae_major_version(ae_major_version){};
-
-    void load();
-    const std::optional<SymbolPointers *> get();
+class ExternalSymbols {
+public:
+  struct SymbolPointers {
+    CEggApp *gEgg = nullptr;
+    GetActiveItem GetActiveItemFn = nullptr;
+    GetCItem GetCItemFn = nullptr;
+    GetMRUItemDir GetMRUItemDirFn = nullptr;
+    GetMRUItemPano GetMRUItemPanoFn = nullptr;
+    GetCurrentItem GetCurrentItemFn = nullptr;
+    CoordXf CoordXfFn = nullptr;
+    GetLocalMouse GetLocalMouseFn = nullptr;
+    PointFrameToFloatSource PointFrameToFloatSourceFn = nullptr;
+    SetFloatZoom SetFloatZoomFn = nullptr;
+    GetFloatZoom GetFloatZoomFn = nullptr;
   };
 
-  ExternalSymbols mExSymbols;
-  DoublePt last_view_pos = {999999.0, 999999.0};
+private:
+  SymbolPointers mSymbols;
+  A_long ae_major_version = 0;
 
-  bool isViewPanoExists();
-  CPanoProjItem *getViewPano();
+  template <typename T>
+  bool loadExternalSymbol(T &symbol_storage, const std::string &symbol_name);
+
+  void load();
+
+public:
+  enum class SYMBOLS_LOADING_STATE {
+    NOT_LOADED,
+    LOADING,
+    SOME_NOT_LOADED,
+    ALL_LOADED,
+  };
+
+  SYMBOLS_LOADING_STATE mLoadingState = SYMBOLS_LOADING_STATE::NOT_LOADED;
+
+  const std::optional<SymbolPointers *> get();
+
+  ExternalSymbols() = default;
+  ExternalSymbols(A_long ae_major_version)
+      : ae_major_version(ae_major_version){};
+};
+
+class ViewPano {
+public:
   void setViewPanoPosition(LongPt point);
   LongPt getViewPanoPosition();
   short getCPaneWidth();
@@ -118,12 +115,27 @@ private:
   M_Point getMouseRelativeToComp();
   LongPt getMouseRelativeToViewPano();
 
+  CPanoProjItem *pano;
+  ExternalSymbols::SymbolPointers extSymbols;
+
+  ViewPano(CPanoProjItem *pano, ExternalSymbols::SymbolPointers extSymbols)
+      : pano(pano), extSymbols(extSymbols) {}
+};
+
+class AeEgg {
+private:
+  DoublePt last_view_pos = {999999.0, 999999.0};
+
+  std::optional<ViewPano> getViewPano();
+
 public:
+  ExternalSymbols extSymbols;
+  
   bool isMouseInsideViewPano();
   void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
 
   AeEgg() = default;
-  AeEgg(A_long ae_major_version) : mExSymbols(ae_major_version){};
+  AeEgg(A_long ae_major_version) : extSymbols(ae_major_version){};
 };
 
 struct ViewPositionExperimentalOption {

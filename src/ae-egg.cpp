@@ -1,6 +1,7 @@
 #include "ae-egg.h"
 #include "logger.h"
 #include "mangled-names/mangled-names.h"
+#include <optional>
 
 #ifdef AE_OS_WIN
 static std::string GetLastWindowsErrorStr() {
@@ -78,14 +79,14 @@ template <typename T> T getFromAfterFXDll(const std::string &fn_name) {
 #endif
 
 template <typename T>
-bool AeEgg::ExternalSymbols::loadExternalSymbol(
-    T &symbol_storage, const std::string &symbol_name) {
+bool ExternalSymbols::loadExternalSymbol(T &symbol_storage,
+                                         const std::string &symbol_name) {
   symbol_storage = getFromAfterFXDll<T>(symbol_name);
 
   return symbol_storage == nullptr ? false : true;
 }
 
-void AeEgg::ExternalSymbols::load() {
+void ExternalSymbols::load() {
   bool loading_err = false;
 
   mLoadingState = SYMBOLS_LOADING_STATE::LOADING;
@@ -128,8 +129,7 @@ void AeEgg::ExternalSymbols::load() {
   }
 }
 
-const std::optional<AeEgg::ExternalSymbols::SymbolPointers *>
-AeEgg::ExternalSymbols::get() {
+const std::optional<ExternalSymbols::SymbolPointers *> ExternalSymbols::get() {
   if (mLoadingState == SYMBOLS_LOADING_STATE::NOT_LOADED) {
     load();
   }
@@ -150,119 +150,107 @@ template <typename T> T getVirtualFn(long long *base_addr, int offset) {
   return reinterpret_cast<T>(*base_addr + offset);
 }
 
-CPanoProjItem *AeEgg::getViewPano() {
+std::optional<ViewPano> AeEgg::getViewPano() {
   CPanoProjItem *view_pano = nullptr;
+  auto externalSymbolsOpt = extSymbols.get();
 
-  GetCurrentItemFn(&gEgg, nullptr, &view_pano);
+  if (externalSymbolsOpt) {
+    auto extSymbols = externalSymbolsOpt.value();
 
-  if (!view_pano) {
-    BEE_Item *bee_item = GetActiveItemFn();
+    extSymbols->GetCurrentItemFn(&extSymbols->gEgg, nullptr, &view_pano);
 
-    if (bee_item) {
-      CItem *c_item = GetCItemFn(bee_item, false);
+    if (!view_pano) {
+      BEE_Item *bee_item = extSymbols->GetActiveItemFn();
 
-      if (c_item) {
-        CDirProjItem *dir_item = GetMRUItemDirFn(c_item);
+      if (bee_item) {
+        CItem *c_item = extSymbols->GetCItemFn(bee_item, false);
 
-        if (dir_item) {
-          view_pano = GetMRUItemPanoFn(dir_item);
+        if (c_item) {
+          CDirProjItem *dir_item = extSymbols->GetMRUItemDirFn(c_item);
+
+          if (dir_item) {
+            view_pano = extSymbols->GetMRUItemPanoFn(dir_item);
+          }
         }
       }
     }
+
+    return view_pano ? std::optional(ViewPano(view_pano, *extSymbols)) : std::nullopt;
   }
 
-  return view_pano;
+  return std::nullopt;
 }
 
-void AeEgg::setViewPanoPosition(LongPt point) {
+void ViewPano::setViewPanoPosition(LongPt point) {
   typedef void(__fastcall * *ScrollToP)(CPanoProjItem *, LongPt *,
                                         unsigned char);
-
-  CPanoProjItem *view_pano = getViewPano();
 
   // call to "virtual void __cdecl CPanorama::ScrollTo(struct LongPt *
   // __ptr64,unsigned char) __ptr64" from AfterFXLib.dll AE CC2024
   const ScrollToP ScrollTo =
-      getVirtualFn<ScrollToP>(reinterpret_cast<long long *>(view_pano), 0x490);
+      getVirtualFn<ScrollToP>(reinterpret_cast<long long *>(pano), 0x490);
 
-  (*ScrollTo)(view_pano, &point, 1);
+  (*ScrollTo)(pano, &point, 1);
 }
 
-LongPt AeEgg::getViewPanoPosition() {
+LongPt ViewPano::getViewPanoPosition() {
   typedef void(__fastcall * *GetPositionP)(CPanoProjItem *, LongPt *);
-  LongPt pos = {0, 0};
-
-  CPanoProjItem *view_pano = getViewPano();
 
   // call to "virtual void __cdecl CPanorama::GetPosition(struct LongPt *
   // __ptr64) __ptr64" from AfterFXLib.dll AE CC2024
-  const GetPositionP GetPosition = getVirtualFn<GetPositionP>(
-      reinterpret_cast<long long *>(view_pano), 0x448);
+  const GetPositionP GetPosition =
+      getVirtualFn<GetPositionP>(reinterpret_cast<long long *>(pano), 0x448);
 
-  (*GetPosition)(view_pano, &pos);
+  LongPt pos = {0, 0};
+  (*GetPosition)(pano, &pos);
 
   return pos;
 }
 
-short AeEgg::getCPaneWidth() {
+short ViewPano::getCPaneWidth() {
   typedef short(__fastcall * *GetWidthP)(CPanoProjItem *);
-
-  CPanoProjItem *view_pano = getViewPano();
 
   // call to "virtual short __cdecl CPane::GetWidth(void) __ptr64" from
   // AfterFXLib.dll AE CC2024
   const GetWidthP GetWidth =
-      getVirtualFn<GetWidthP>(reinterpret_cast<long long *>(view_pano), 0x318);
+      getVirtualFn<GetWidthP>(reinterpret_cast<long long *>(pano), 0x318);
 
-  short cpane_width = (*GetWidth)(view_pano);
+  auto cpane_width = (*GetWidth)(pano);
 
   return cpane_width;
 }
 
-short AeEgg::getCPaneHeight() {
+short ViewPano::getCPaneHeight() {
   typedef short(__fastcall * *GetHeightP)(CPanoProjItem *);
-
-  CPanoProjItem *view_pano = getViewPano();
 
   // call to "virtual short __cdecl CPane::GetHeight(void) __ptr64" from
   // AfterFXLib.dll AE CC2024
   const GetHeightP GetHeight =
-      getVirtualFn<GetHeightP>(reinterpret_cast<long long *>(view_pano), 0x320);
+      getVirtualFn<GetHeightP>(reinterpret_cast<long long *>(pano), 0x320);
 
-  short cpane_height = (*GetHeight)(view_pano);
+  auto cpane_height = (*GetHeight)(pano);
 
   return cpane_height;
 }
 
-M_Point AeEgg::ScreenToCompMouse(POINT screen_p) {
-  CPanoProjItem *view_pano = getViewPano();
+M_Point ViewPano::ScreenToCompMouse(POINT screen_p) {
+  M_Point comp_mouse = {0, 0};
 
-  M_Point pp = {0, 0};
-  CoordXfFn(view_pano, &pp, FEE_CoordFxType::Two, PointToMPoint(screen_p));
+  extSymbols.CoordXfFn(pano, &comp_mouse, FEE_CoordFxType::Two,
+                       PointToMPoint(screen_p));
 
-  return pp;
+  return comp_mouse;
 }
 
-M_Point AeEgg::getMouseRelativeToComp() {
-  CPanoProjItem *view_pano = getViewPano();
+M_Point ViewPano::getMouseRelativeToComp() {
+  M_Point comp_mouse = {0, 0};
 
-  M_Point pp = {0, 0};
-  GetLocalMouseFn(view_pano, &pp);
+  extSymbols.GetLocalMouseFn(pano, &comp_mouse);
 
-  return pp;
+  return comp_mouse;
 }
 
-bool AeEgg::isViewPanoExists() {
-  CPanoProjItem *view_pano = getViewPano();
-
-  if (view_pano) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
-LongPt AeEgg::getMouseRelativeToViewPano() {
+LongPt ViewPano::getMouseRelativeToViewPano() {
   auto mouse_rel_to_comp = getMouseRelativeToComp();
   auto view_pano_position = getViewPanoPosition();
 
@@ -274,87 +262,92 @@ LongPt AeEgg::getMouseRelativeToViewPano() {
 }
 
 bool AeEgg::isMouseInsideViewPano() {
-  if (!isViewPanoExists()) {
-    return false;
+  auto view_pano = getViewPano();
+
+  if (view_pano) {
+    auto mouse_rel_to_view = view_pano->getMouseRelativeToViewPano();
+    auto view_pano_width = view_pano->getCPaneWidth();
+    auto view_pano_height = view_pano->getCPaneHeight();
+
+    return (mouse_rel_to_view.x >= 0 && mouse_rel_to_view.y >= 0 &&
+            mouse_rel_to_view.x <= view_pano_width &&
+            mouse_rel_to_view.y <= view_pano_height);
   }
 
-  auto mouse_rel_to_view = getMouseRelativeToViewPano();
-  auto view_pano_width = getCPaneWidth();
-  auto view_pano_height = getCPaneHeight();
-
-  return (mouse_rel_to_view.x >= 0 && mouse_rel_to_view.y >= 0 &&
-          mouse_rel_to_view.x <= view_pano_width &&
-          mouse_rel_to_view.y <= view_pano_height);
+  return false;
 }
 
 void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
-  if (!isViewPanoExists()) {
-    return;
-  }
+  auto view_pano = getViewPano();
 
-  CPanoProjItem *view_pano = getViewPano();
+  if (view_pano) {
+    auto &extSymbols = view_pano->extSymbols;
 
-  double current_zoom = GetFloatZoomFn(view_pano);
-  double new_zoom = current_zoom + zoom_delta;
+    double current_zoom = extSymbols.GetFloatZoomFn(view_pano->pano);
+    double new_zoom = current_zoom + zoom_delta;
 
-  POINT cursor_pos;
-  GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
+    POINT cursor_pos;
+    GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
 
-  LongPt actual_view_pos = getViewPanoPosition();
+    auto actual_view_pos = view_pano->getViewPanoPosition();
 
-  DoublePt view_pos = {
-      lround(last_view_pos.y) == actual_view_pos.y ? last_view_pos.y
-                                                   : actual_view_pos.y,
-      lround(last_view_pos.x) == actual_view_pos.x ? last_view_pos.x
-                                                   : actual_view_pos.x,
-  };
-
-  DoublePt zoom_pt;
-  DoublePt dist_to_zoom_pt;
-
-  switch (zoom_around) {
-  case ZOOM_AROUND::PANEL_CENTER: {
-    double cpane_width2 = getCPaneWidth() / 2.0;
-    double cpane_height2 = getCPaneHeight() / 2.0;
-
-    dist_to_zoom_pt = {
-        -cpane_height2 - view_pos.y,
-        -cpane_width2 - view_pos.x,
+    DoublePt view_pos = {
+        lround(last_view_pos.y) == actual_view_pos.y ? last_view_pos.y
+                                                     : actual_view_pos.y,
+        lround(last_view_pos.x) == actual_view_pos.x ? last_view_pos.x
+                                                     : actual_view_pos.x,
     };
 
-    zoom_pt = {cpane_height2, cpane_width2};
+    DoublePt zoom_pt;
+    DoublePt dist_to_zoom_pt;
 
-    break;
-  }
-  case ZOOM_AROUND::CURSOR_POSTION: {
-    M_Point comp_mouse_pos = getMouseRelativeToComp();
+    switch (zoom_around) {
+    case ZOOM_AROUND::PANEL_CENTER: {
+      double cpane_width2 = view_pano->getCPaneWidth() / 2.0;
+      double cpane_height2 = view_pano->getCPaneHeight() / 2.0;
 
-    dist_to_zoom_pt = {
-        static_cast<double>(-comp_mouse_pos.y),
-        static_cast<double>(-comp_mouse_pos.x),
+      dist_to_zoom_pt = {
+          -cpane_height2 - view_pos.y,
+          -cpane_width2 - view_pos.x,
+      };
+
+      zoom_pt = {cpane_height2, cpane_width2};
+
+      break;
+    }
+    case ZOOM_AROUND::CURSOR_POSTION: {
+      M_Point comp_mouse_pos = view_pano->getMouseRelativeToComp();
+
+      dist_to_zoom_pt = {
+          static_cast<double>(-comp_mouse_pos.y),
+          static_cast<double>(-comp_mouse_pos.x),
+      };
+
+      zoom_pt = {
+          static_cast<double>(-view_pos.y + comp_mouse_pos.y),
+          static_cast<double>(-view_pos.x + comp_mouse_pos.x),
+      };
+
+      break;
+    }
+    default:
+      /* exit the function */
+      return;
+    }
+
+    DoublePt new_view_pos = {
+        -(dist_to_zoom_pt.y * (new_zoom / current_zoom) + zoom_pt.y),
+        -(dist_to_zoom_pt.x * (new_zoom / current_zoom) + zoom_pt.x),
     };
 
-    zoom_pt = {
-        static_cast<double>(-view_pos.y + comp_mouse_pos.y),
-        static_cast<double>(-view_pos.x + comp_mouse_pos.x),
-    };
+    extSymbols.SetFloatZoomFn(view_pano->pano, new_zoom, {0, 0}, true, true,
+                              false, false, true);
 
-    break;
+    view_pano->setViewPanoPosition(
+        {lround(new_view_pos.y), lround(new_view_pos.x)});
+
+    last_view_pos = new_view_pos;
   }
-  default:
-    /* exit the function */
-    return;
-  }
-
-  DoublePt new_view_pos = {
-      -(dist_to_zoom_pt.y * (new_zoom / current_zoom) + zoom_pt.y),
-      -(dist_to_zoom_pt.x * (new_zoom / current_zoom) + zoom_pt.x),
-  };
-
-  SetFloatZoomFn(view_pano, new_zoom, {0, 0}, true, true, false, false, true);
-  setViewPanoPosition({lround(new_view_pos.y), lround(new_view_pos.x)});
-
-  last_view_pos = new_view_pos;
 }
 #elif defined AE_OS_MAC
 void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
