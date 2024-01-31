@@ -1,9 +1,8 @@
 # CMakeList.txt : CMake project for cmake-test, include source and define
 # project specific logic here.
 #
-cmake_minimum_required (VERSION 3.12)
+cmake_minimum_required (VERSION 3.14)
 set( CMAKE_CXX_STANDARD 20 )
-include(FetchContent)
 
 if( APPLE )
 	# Create Universal Binary
@@ -16,31 +15,6 @@ if( APPLE )
 endif()
 
 project ("Zoom")
-
-# Fetch JSON library
-FetchContent_Declare(
-	json 
-	URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
-	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/json)
-
-# Fetch uiohook library
-if ( WIN32 )
-FetchContent_Declare(
-	uiohook 
-	GIT_REPOSITORY https://github.com/kwhat/libuiohook.git
-	GIT_TAG 1.3
-	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/uiohook-win
-)
-elseif ( APPLE )
-FetchContent_Declare(
-	uiohook 
-	GIT_REPOSITORY https://github.com/kwhat/libuiohook.git
-	GIT_TAG 1.3
-	SOURCE_DIR ${PROJECT_SOURCE_DIR}/extern/uiohook-mac
-)
-endif()
-
-FetchContent_MakeAvailable(json uiohook)
 
 add_subdirectory(extern)
 
@@ -176,6 +150,11 @@ target_link_libraries(
 )
 
 if( WIN32 )
+  # target_link_libraries(uiohook advapi32)
+  # set_target_properties(uiohook PROPERTIES LINK_LIBRARY_OVERRIDE "advapi32")
+  
+  # set_property(TARGET uiohook PROPERTY LINK_LIBRARIES "advapi32")
+  
 	set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".aex")
 
 	install(
