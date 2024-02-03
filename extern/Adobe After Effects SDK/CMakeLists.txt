@@ -13,7 +13,7 @@ add_library(
 )
 
 # Surpress warnings
-target_compile_options( AESDK PRIVATE "-w" )
+target_compile_options( AESDK PUBLIC "-w" )
 
 set( AESDK_ROOT ${PROJECT_SOURCE_DIR} CACHE INTERNAL "After Effects SDK Root")
 

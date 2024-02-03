@@ -34,6 +34,23 @@
       }
     },
     {
+      "name": "linux-to-macos-debug",
+      "displayName": "Linux Target MacOS Debug",
+      "description": "Target MacOS from Linux.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Debug" ,
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-macos-x86_64.cmake"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
       "name": "macos-debug",
       "displayName": "macOS Debug",
       "description": "Target a remote macOS system.",
