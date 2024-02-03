@@ -1,16 +1,18 @@
+#include "ae-zoom.h"
+#include "AEGP_SuiteHandler.h"
+#include "AE_Macros.h"
+#include "ExternalObject/SoSharedLibDefs.h"
+#include "ae-egg.h"
+#include "logger.h"
 #include <atomic>
 #include <exception>
 #include <future>
 #include <mutex>
 #include <optional>
+#include <ranges>
+#include <string>
 #include <tuple>
 #include <vector>
-#include "ExternalObject/SoSharedLibDefs.h"
-#include "AE_Macros.h"
-#include "AEGP_SuiteHandler.h"
-#include "ae-egg.h"
-#include "logger.h"
-#include "ae-zoom.h"
 
 #ifdef AE_OS_MAC
 #include <objc/objc-runtime.h>
@@ -594,8 +596,25 @@ static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
   if (command == hack_cmd) {
     AEGP_SuiteHandler suites(sP);
 
-    // suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
+    auto view_pano = S_ae_egg.getViewPano();
+    std::string msg_str;
 
+    if (view_pano) {
+      std::string load_state =
+          S_ae_egg.extSymbols.mLoadingState ==
+                  ExternalSymbols::SYMBOLS_LOADING_STATE::ALL_LOADED
+              ? "All loaded"
+              : "Not loaded";
+      msg_str = "Symbols loading state: " + load_state;
+
+      auto comp_mouse = view_pano->getMouseRelativeToComp();
+      msg_str += "\nMouse relative to comp: X:" + std::to_string(comp_mouse.x) +
+                 ", Y: " + std::to_string(comp_mouse.y);
+    } else {
+      msg_str = "NOOO view_pano";
+    }
+
+    suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
     *handledPB = true;
   }
 

@@ -111,7 +111,7 @@ public:
   LongPt getViewPanoPosition();
   short getCPaneWidth();
   short getCPaneHeight();
-  M_Point ScreenToCompMouse(POINT screen_p);
+  // M_Point ScreenToCompMouse(M_Point screen_p);
   M_Point getMouseRelativeToComp();
   LongPt getMouseRelativeToViewPano();
 
@@ -126,11 +126,10 @@ class AeEgg {
 private:
   DoublePt last_view_pos = {999999.0, 999999.0};
 
-  std::optional<ViewPano> getViewPano();
-
 public:
   ExternalSymbols extSymbols;
-  
+
+  std::optional<ViewPano> getViewPano();
   bool isMouseInsideViewPano();
   void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
 

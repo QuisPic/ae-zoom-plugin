@@ -49,9 +49,7 @@ template <typename T> T getFromAfterFXDll(const std::string &fn_name) {
 
   return result;
 }
-#endif
-
-#ifdef AE_OS_MAC
+#elif defined AE_OS_MAC
 template <typename T> T getFromAfterFXDll(const std::string &fn_name) {
   void *handle = dlopen("AfterFXLib.framework/AfterFXLib", RTLD_LAZY);
 
@@ -141,11 +139,6 @@ const std::optional<ExternalSymbols::SymbolPointers *> ExternalSymbols::get() {
   }
 }
 
-#ifdef AE_OS_WIN
-static inline M_Point PointToMPoint(POINT p) {
-  return M_Point{static_cast<short>(p.y), static_cast<short>(p.x)};
-}
-
 template <typename T> T getVirtualFn(long long *base_addr, int offset) {
   return reinterpret_cast<T>(*base_addr + offset);
 }
@@ -175,7 +168,8 @@ std::optional<ViewPano> AeEgg::getViewPano() {
       }
     }
 
-    return view_pano ? std::optional(ViewPano(view_pano, *extSymbols)) : std::nullopt;
+    return view_pano ? std::optional(ViewPano(view_pano, *extSymbols))
+                     : std::nullopt;
   }
 
   return std::nullopt;
@@ -233,14 +227,13 @@ short ViewPano::getCPaneHeight() {
   return cpane_height;
 }
 
-M_Point ViewPano::ScreenToCompMouse(POINT screen_p) {
-  M_Point comp_mouse = {0, 0};
-
-  extSymbols.CoordXfFn(pano, &comp_mouse, FEE_CoordFxType::Two,
-                       PointToMPoint(screen_p));
-
-  return comp_mouse;
-}
+// M_Point ViewPano::ScreenToCompMouse(M_Point screen_p) {
+//   M_Point comp_mouse = {0, 0};
+//
+//   extSymbols.CoordXfFn(pano, &comp_mouse, FEE_CoordFxType::Two, screen_p);
+//
+//   return comp_mouse;
+// }
 
 M_Point ViewPano::getMouseRelativeToComp() {
   M_Point comp_mouse = {0, 0};
@@ -286,8 +279,9 @@ void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
     double current_zoom = extSymbols.GetFloatZoomFn(view_pano->pano);
     double new_zoom = current_zoom + zoom_delta;
 
-    POINT cursor_pos;
-    GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
+    // POINT cursor_pos;
+    // GetCursorPos(&cursor_pos); // Get the cursor position in screen
+    // coordinates
 
     auto actual_view_pos = view_pano->getViewPanoPosition();
 
@@ -349,10 +343,3 @@ void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
     last_view_pos = new_view_pos;
   }
 }
-#elif defined AE_OS_MAC
-void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
-  return;
-}
-
-bool AeEgg::isMouseInsideViewPano() { return true; }
-#endif
