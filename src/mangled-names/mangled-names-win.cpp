@@ -92,4 +92,37 @@ const std::string MangledNames::GetFloatZoom(const A_long major_version) {
     break;
   }
 }
+
+const std::string MangledNames::GetWidth(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "?GetWidth@CPane@@UEAAFXZ";
+    break;
+  }
+}
+
+const std::string MangledNames::GetHeight(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "?GetHeight@CPane@@UEAAFXZ";
+    break;
+  }
+}
+
+const std::string MangledNames::ScrollTo(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "?ScrollTo@CPanorama@@UEAAXPEAULongPt@@E@Z";
+    break;
+  }
+}
+
+const std::string MangledNames::GetPosition(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "?GetPosition@CPanorama@@UEAAXPEAULongPt@@@Z";
+    break;
+  }
+}
+
 #endif // AE_OS_WIN

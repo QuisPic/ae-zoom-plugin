@@ -46,20 +46,23 @@ class CDirProjItem;
 
 class CEggApp;
 
-typedef BEE_Item *(__stdcall *GetActiveItem)();
-typedef CItem *(__stdcall *GetCItem)(BEE_Item *, bool);
-typedef CDirProjItem *(__stdcall *GetMRUItemDir)(CItem *);
-typedef CPanoProjItem *(__stdcall *GetMRUItemPano)(CDirProjItem *);
-typedef void(__stdcall *GetCurrentItem)(CEggApp **, BEE_Item **,
-                                        CPanoProjItem **);
-typedef M_Point(__stdcall *CoordXf)(CPanoProjItem *, M_Point *, FEE_CoordFxType,
-                                    M_Point);
-typedef M_Point(__stdcall *GetLocalMouse)(CPanoProjItem *, M_Point *);
-typedef void(__stdcall *PointFrameToFloatSource)(CPanoProjItem *, M_Point,
-                                                 M_Vector2T<double> *);
-typedef void(__stdcall *SetFloatZoom)(CPanoProjItem *, double, LongPt, bool,
-                                      bool, bool, bool, bool);
-typedef double(__stdcall *GetFloatZoom)(CPanoProjItem *);
+typedef BEE_Item *(*GetActiveItem)();
+typedef CItem *(*GetCItem)(BEE_Item *, bool);
+typedef CDirProjItem *(*GetMRUItemDir)(CItem *);
+typedef CPanoProjItem *(*GetMRUItemPano)(CDirProjItem *);
+typedef void (*GetCurrentItem)(CEggApp **, BEE_Item **, CPanoProjItem **);
+typedef M_Point (*CoordXf)(CPanoProjItem *, M_Point *, FEE_CoordFxType,
+                           M_Point);
+typedef M_Point (*GetLocalMouse)(CPanoProjItem *, M_Point *);
+typedef void (*PointFrameToFloatSource)(CPanoProjItem *, M_Point,
+                                        M_Vector2T<double> *);
+typedef void (*SetFloatZoom)(CPanoProjItem *, double, LongPt, bool, bool, bool,
+                             bool, bool);
+typedef double (*GetFloatZoom)(CPanoProjItem *);
+typedef short (*GetWidth)(CPanoProjItem *);
+typedef short (*GetHeight)(CPanoProjItem *);
+typedef void (*ScrollTo)(CPanoProjItem *, LongPt *, bool);
+typedef void (*GetPosition)(CPanoProjItem *, LongPt *);
 
 enum class ZOOM_AROUND { PANEL_CENTER, CURSOR_POSTION };
 
@@ -77,6 +80,10 @@ public:
     PointFrameToFloatSource PointFrameToFloatSourceFn = nullptr;
     SetFloatZoom SetFloatZoomFn = nullptr;
     GetFloatZoom GetFloatZoomFn = nullptr;
+    GetWidth GetWidhtFn = nullptr;
+    GetHeight GetHeightFn = nullptr;
+    ScrollTo ScrollToFn = nullptr;
+    GetPosition GetPositionFn = nullptr;
   };
 
 private:

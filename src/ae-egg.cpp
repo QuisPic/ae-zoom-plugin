@@ -117,6 +117,14 @@ void ExternalSymbols::load() {
                               MangledNames::SetFloatZoom(ae_major_version)));
   SYMB_ERR(loadExternalSymbol(mSymbols.GetFloatZoomFn,
                               MangledNames::GetFloatZoom(ae_major_version)));
+  SYMB_ERR(loadExternalSymbol(mSymbols.GetWidhtFn,
+                              MangledNames::GetWidth(ae_major_version)));
+  SYMB_ERR(loadExternalSymbol(mSymbols.GetHeightFn,
+                              MangledNames::GetHeight(ae_major_version)));
+  SYMB_ERR(loadExternalSymbol(mSymbols.ScrollToFn,
+                              MangledNames::ScrollTo(ae_major_version)));
+  SYMB_ERR(loadExternalSymbol(mSymbols.GetPositionFn,
+                              MangledNames::GetPosition(ae_major_version)));
 
 #undef SYMB_ERR
 
@@ -176,53 +184,58 @@ std::optional<ViewPano> AeEgg::getViewPano() {
 }
 
 void ViewPano::setViewPanoPosition(LongPt point) {
-  typedef void(__fastcall * *ScrollToP)(CPanoProjItem *, LongPt *,
-                                        unsigned char);
+  // typedef void(__fastcall * *ScrollToP)(CPanoProjItem *, LongPt *,
+  //                                       unsigned char);
 
   // call to "virtual void __cdecl CPanorama::ScrollTo(struct LongPt *
   // __ptr64,unsigned char) __ptr64" from AfterFXLib.dll AE CC2024
-  const ScrollToP ScrollTo =
-      getVirtualFn<ScrollToP>(reinterpret_cast<long long *>(pano), 0x490);
+  // const ScrollToP ScrollTo =
+  //     getVirtualFn<ScrollToP>(reinterpret_cast<long long *>(pano), 0x490);
+  //
+  // (*ScrollTo)(pano, &point, 1);
 
-  (*ScrollTo)(pano, &point, 1);
+  extSymbols.ScrollToFn(pano, &point, true);
 }
 
 LongPt ViewPano::getViewPanoPosition() {
-  typedef void(__fastcall * *GetPositionP)(CPanoProjItem *, LongPt *);
+  // typedef void(__fastcall * *GetPositionP)(CPanoProjItem *, LongPt *);
 
   // call to "virtual void __cdecl CPanorama::GetPosition(struct LongPt *
   // __ptr64) __ptr64" from AfterFXLib.dll AE CC2024
-  const GetPositionP GetPosition =
-      getVirtualFn<GetPositionP>(reinterpret_cast<long long *>(pano), 0x448);
+  // const GetPositionP GetPosition =
+  //     getVirtualFn<GetPositionP>(reinterpret_cast<long long *>(pano), 0x448);
 
   LongPt pos = {0, 0};
-  (*GetPosition)(pano, &pos);
+  // (*GetPosition)(pano, &pos);
+  extSymbols.GetPositionFn(pano, &pos);
 
   return pos;
 }
 
 short ViewPano::getCPaneWidth() {
-  typedef short(__fastcall * *GetWidthP)(CPanoProjItem *);
+  // typedef short(__fastcall * *GetWidthP)(CPanoProjItem *);
 
   // call to "virtual short __cdecl CPane::GetWidth(void) __ptr64" from
   // AfterFXLib.dll AE CC2024
-  const GetWidthP GetWidth =
-      getVirtualFn<GetWidthP>(reinterpret_cast<long long *>(pano), 0x318);
+  // const GetWidthP GetWidth =
+  //     getVirtualFn<GetWidthP>(reinterpret_cast<long long *>(pano), 0x318);
 
-  auto cpane_width = (*GetWidth)(pano);
+  // auto cpane_width = (*GetWidth)(pano);
+  auto cpane_width = extSymbols.GetWidhtFn(pano);
 
   return cpane_width;
 }
 
 short ViewPano::getCPaneHeight() {
-  typedef short(__fastcall * *GetHeightP)(CPanoProjItem *);
+  // typedef short(__fastcall * *GetHeightP)(CPanoProjItem *);
 
   // call to "virtual short __cdecl CPane::GetHeight(void) __ptr64" from
   // AfterFXLib.dll AE CC2024
-  const GetHeightP GetHeight =
-      getVirtualFn<GetHeightP>(reinterpret_cast<long long *>(pano), 0x320);
+  // const GetHeightP GetHeight =
+  //     getVirtualFn<GetHeightP>(reinterpret_cast<long long *>(pano), 0x320);
 
-  auto cpane_height = (*GetHeight)(pano);
+  // auto cpane_height = (*GetHeight)(pano);
+  auto cpane_height = extSymbols.GetHeightFn(pano);
 
   return cpane_height;
 }
