@@ -607,9 +607,8 @@ static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
               : "Not loaded";
       msg_str = "Symbols loading state: " + load_state;
 
-      auto comp_mouse = view_pano->getMouseRelativeToComp();
-      msg_str += "\nMouse relative to comp: X:" + std::to_string(comp_mouse.x) +
-                 ", Y: " + std::to_string(comp_mouse.y);
+      // auto cpane_width = view_pano->getCPaneWidth();
+      // msg_str += "\nCPane width:" + std::to_string(cpane_width);
     } else {
       msg_str = "NOOO view_pano";
     }

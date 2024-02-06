@@ -91,4 +91,36 @@ const std::string MangledNames::GetFloatZoom(const A_long major_version) {
     break;
   }
 }
+
+const std::string MangledNames::GetWidth(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "_ZN5CPane8GetWidthEv";
+    break;
+  }
+}
+
+const std::string MangledNames::GetHeight(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "_ZN5CPane9GetHeightEv";
+    break;
+  }
+}
+
+const std::string MangledNames::ScrollTo(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "_ZN9CPanorama8ScrollToEP6LongPth";
+    break;
+  }
+}
+
+const std::string MangledNames::GetPosition(const A_long major_version) {
+  switch (major_version) {
+  default:
+    return "_ZN9CPanorama11GetPositionEP6LongPt";
+    break;
+  }
+}
 #endif // AE_OS_MAC
