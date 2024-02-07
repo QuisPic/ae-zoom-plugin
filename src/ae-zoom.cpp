@@ -596,10 +596,11 @@ static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
   if (command == hack_cmd) {
     AEGP_SuiteHandler suites(sP);
 
-    auto view_pano = S_ae_egg.getViewPano();
+    auto extSymb = S_ae_egg.extSymbols.get();
+    // auto view_pano = S_ae_egg.getViewPano();
     std::string msg_str;
 
-    if (view_pano) {
+    if (extSymb) {
       std::string load_state =
           S_ae_egg.extSymbols.mLoadingState ==
                   ExternalSymbols::SYMBOLS_LOADING_STATE::ALL_LOADED
@@ -607,10 +608,14 @@ static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
               : "Not loaded";
       msg_str = "Symbols loading state: " + load_state;
 
+      CPanoProjItem *view_pano = nullptr;
+      BEE_Item *bee_item = nullptr;
+      extSymb.value()->GetCurrentItemFn(extSymb.value()->gEgg, &bee_item, &view_pano);
       // auto cpane_width = view_pano->getCPaneWidth();
       // msg_str += "\nCPane width:" + std::to_string(cpane_width);
+      msg_str += view_pano ? "\nYes view pano." : "";
     } else {
-      msg_str = "NOOO view_pano";
+      msg_str = "NOOO";
     }
 
     suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());

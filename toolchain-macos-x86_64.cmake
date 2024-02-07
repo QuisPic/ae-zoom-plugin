@@ -9,7 +9,8 @@ set(TARGET x86_64-apple-darwin)
 # cross compilers to use for C, C++
 set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-clang)
 set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-clang++)
-add_link_options("-fuse-ld=lld")
+# add_link_options("-fuse-ld=lld")
+add_link_options("-fuse-ld=/usr/local/osxcross/bin/x86_64-apple-darwin23-ld")
 
 # specify the cross compiler target
 set(CMAKE_C_COMPILER_TARGET ${TARGET})

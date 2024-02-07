@@ -158,7 +158,7 @@ std::optional<ViewPano> AeEgg::getViewPano() {
   if (externalSymbolsOpt) {
     auto extSymbols = externalSymbolsOpt.value();
 
-    extSymbols->GetCurrentItemFn(&extSymbols->gEgg, nullptr, &view_pano);
+    extSymbols->GetCurrentItemFn(extSymbols->gEgg, nullptr, &view_pano);
 
     if (!view_pano) {
       BEE_Item *bee_item = extSymbols->GetActiveItemFn();

@@ -50,7 +50,7 @@ typedef BEE_Item *(*GetActiveItem)();
 typedef CItem *(*GetCItem)(BEE_Item *, bool);
 typedef CDirProjItem *(*GetMRUItemDir)(CItem *);
 typedef CPanoProjItem *(*GetMRUItemPano)(CDirProjItem *);
-typedef void (*GetCurrentItem)(CEggApp **, BEE_Item **, CPanoProjItem **);
+typedef void (__fastcall *GetCurrentItem)(CEggApp *, BEE_Item **, CPanoProjItem **);
 typedef M_Point (*CoordXf)(CPanoProjItem *, M_Point *, FEE_CoordFxType,
                            M_Point);
 typedef M_Point (*GetLocalMouse)(CPanoProjItem *, M_Point *);
