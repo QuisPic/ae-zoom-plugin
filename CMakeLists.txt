@@ -37,12 +37,22 @@ if(WIN32)
 
   if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(CMD_GENERATE_RR
-        cl /I \"${AESDK_ROOT}/Headers\" /EP \"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\" > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
-    )
+        cl
+        /I
+        \"${AESDK_ROOT}/Headers\"
+        /EP
+        \"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\"
+        >
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr)
 
     set(CMD_GENERATE_RC
-        cl /D "MSWindows" /EP ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
-    )
+        cl
+        /D
+        "MSWindows"
+        /EP
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
+        >
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc)
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 
     set(CMD_GENERATE_RR
@@ -165,6 +175,16 @@ elseif(APPLE)
 
   install(DIRECTORY "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.plugin"
           DESTINATION "${PLUGIN_FOLDER}/")
+
+  if(NOT CMAKE_HOST_APPLE)
+    add_custom_command(
+      TARGET ${PROJECT_NAME}
+      POST_BUILD
+      COMMAND
+        dsymutil
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.plugin/Contents/MacOS/${PROJECT_NAME}
+    )
+  endif()
 endif()
 
 if(REMOTE_MAC_BUILD)
