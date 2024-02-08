@@ -249,9 +249,7 @@ short ViewPano::getCPaneHeight() {
 // }
 
 M_Point ViewPano::getMouseRelativeToComp() {
-  M_Point comp_mouse = {0, 0};
-
-  extSymbols.GetLocalMouseFn(pano, &comp_mouse);
+  auto comp_mouse = extSymbols.GetLocalMouseFn(pano);
 
   return comp_mouse;
 }

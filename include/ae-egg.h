@@ -53,7 +53,13 @@ typedef CPanoProjItem *(*GetMRUItemPano)(CDirProjItem *);
 typedef void (__fastcall *GetCurrentItem)(CEggApp *, BEE_Item **, CPanoProjItem **);
 typedef M_Point (*CoordXf)(CPanoProjItem *, M_Point *, FEE_CoordFxType,
                            M_Point);
-typedef M_Point (*GetLocalMouse)(CPanoProjItem *, M_Point *);
+
+#ifdef AE_OS_WIN
+  typedef M_Point (*GetLocalMouse)(CPanoProjItem *, M_Point *);
+#elifdef AE_OS_MAC
+  typedef M_Point (*GetLocalMouse)(CPanoProjItem *);
+#endif 
+
 typedef void (*PointFrameToFloatSource)(CPanoProjItem *, M_Point,
                                         M_Vector2T<double> *);
 typedef void (*SetFloatZoom)(CPanoProjItem *, double, LongPt, bool, bool, bool,
