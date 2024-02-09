@@ -19,7 +19,7 @@ class BEE_Item;
 class CPane;
 
 struct LongPt {
-  long y, x;
+  int32_t y, x;
 };
 struct DoublePt {
   double y, x;
@@ -50,15 +50,16 @@ typedef BEE_Item *(*GetActiveItem)();
 typedef CItem *(*GetCItem)(BEE_Item *, bool);
 typedef CDirProjItem *(*GetMRUItemDir)(CItem *);
 typedef CPanoProjItem *(*GetMRUItemPano)(CDirProjItem *);
-typedef void (__fastcall *GetCurrentItem)(CEggApp *, BEE_Item **, CPanoProjItem **);
+typedef void(__fastcall *GetCurrentItem)(CEggApp *, BEE_Item **,
+                                         CPanoProjItem **);
 typedef M_Point (*CoordXf)(CPanoProjItem *, M_Point *, FEE_CoordFxType,
                            M_Point);
 
 #ifdef AE_OS_WIN
-  typedef M_Point (*GetLocalMouse)(CPanoProjItem *, M_Point *);
+typedef M_Point (*GetLocalMouse)(CPanoProjItem *, M_Point *);
 #elifdef AE_OS_MAC
-  typedef M_Point (*GetLocalMouse)(CPanoProjItem *);
-#endif 
+typedef M_Point (*GetLocalMouse)(CPanoProjItem *);
+#endif
 
 typedef void (*PointFrameToFloatSource)(CPanoProjItem *, M_Point,
                                         M_Vector2T<double> *);
@@ -68,7 +69,12 @@ typedef double (*GetFloatZoom)(CPanoProjItem *);
 typedef short (*GetWidth)(CPanoProjItem *);
 typedef short (*GetHeight)(CPanoProjItem *);
 typedef void (*ScrollTo)(CPanoProjItem *, LongPt *, bool);
+
+#ifdef AE_OS_WIN
 typedef void (*GetPosition)(CPanoProjItem *, LongPt *);
+#elifdef AE_OS_MAC
+typedef LongPt (*GetPosition)(CPanoProjItem *, LongPt *);
+#endif
 
 enum class ZOOM_AROUND { PANEL_CENTER, CURSOR_POSTION };
 

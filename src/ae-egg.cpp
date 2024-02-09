@@ -349,7 +349,8 @@ void AeEgg::incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
                               false, false, true);
 
     view_pano->setViewPanoPosition(
-        {lround(new_view_pos.y), lround(new_view_pos.x)});
+        {static_cast<int32_t>(lround(new_view_pos.y)),
+         static_cast<int32_t>(lround(new_view_pos.x))});
 
     last_view_pos = new_view_pos;
   }
