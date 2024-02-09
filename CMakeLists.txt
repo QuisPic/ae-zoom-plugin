@@ -177,12 +177,25 @@ elseif(APPLE)
           DESTINATION "${PLUGIN_FOLDER}/")
 
   if(NOT CMAKE_HOST_APPLE)
+    # create debug symbols
     add_custom_command(
       TARGET ${PROJECT_NAME}
-      POST_BUILD
+      POST_BUILD USES_TERMINAL
       COMMAND
         dsymutil
         ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.plugin/Contents/MacOS/${PROJECT_NAME}
+        -o ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.dSYM)
+
+    # create lldb start-up script
+    set(LLDB_REMOTE_NAME Deniss-MacBook-Air.local)
+    set(LLDB_REMOTE_PORT 16000)
+    file(
+      WRITE ${CMAKE_CURRENT_BINARY_DIR}/lldb-remote-start-up.txt
+      "platform select remote-macosx\n"
+      "platform connect connect://${LLDB_REMOTE_NAME}:${LLDB_REMOTE_PORT}\n"
+      "setting set target.memory-module-load-level partial\n"
+      "attach -n \"After Effects\"\n"
+      "target symbols add ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.dSYM/Contents/Resources/DWARF/${PROJECT_NAME}"
     )
   endif()
 endif()
