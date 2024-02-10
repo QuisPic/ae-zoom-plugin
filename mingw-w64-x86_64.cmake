@@ -1,18 +1,17 @@
 # Sample toolchain file for building for Windows from an Ubuntu Linux system.
 #
-# Typical usage:
-#    *) install cross compiler: `sudo apt-get install mingw-w64`
-#    *) cd build
-#    *) cmake -DCMAKE_TOOLCHAIN_FILE=~/mingw-w64-x86_64.cmake ..
-# This is free and unencumbered software released into the public domain.
+# Typical usage: *) install cross compiler: `sudo apt-get install mingw-w64` *)
+# cd build *) cmake -DCMAKE_TOOLCHAIN_FILE=~/mingw-w64-x86_64.cmake .. This is
+# free and unencumbered software released into the public domain.
 
 set(CMAKE_SYSTEM_NAME Windows)
 set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
 
 # for debugging in lldb
-# add_compile_options("-gdwarf-2")
+set(CMAKE_C_FLAGS_DEBUG "-gdwarf-4")
+set(CMAKE_CXX_FLAGS_DEBUG "-gdwarf-4")
 # set(CMAKE_CXX_FLAGS_DEBUG "-gcodeview")
-set(CMAKE_CXX_FLAGS_DEBUG "-gdwarf")
+# add_compile_options("-gdwarf-2")
 
 # cross compilers to use for C, C++ and Fortran
 set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc)
