@@ -30,78 +30,62 @@ if(WIN32)
       "C:/Program Files/Adobe/Adobe After Effects 2023/Support Files/Plug-ins"
       CACHE STRING "After Effects Plugin folder")
 
-  set(CMD_GENERATE_RRC
-      ${AFX_REZ} ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
-      ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc)
+  if(CMAKE_HOST_WIN32)
+    set(CMD_GENERATE_RRC
+        ${AFX_REZ} ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
+        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc)
+  elseif(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE) # This currently works only
+                                                   # on Windows Subsystem for
+                                                   # Linux (WSL)
+    execute_process(
+      COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/sh/check-if-wsl.sh
+      OUTPUT_VARIABLE IS_WSL
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    set(CMD_GENERATE_RR
-        cl
-        /I
-        \"${AESDK_ROOT}/Headers\"
-        /EP
-        \"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\"
-        >
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr)
-
-    set(CMD_GENERATE_RC
-        cl
-        /D
-        "MSWindows"
-        /EP
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
-        >
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc)
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-
-    set(CMD_GENERATE_RR
-        ${CMAKE_CXX_COMPILER}
-        -I
-        ${AESDK_ROOT}/Headers
-        -E
-        -P
-        -x
-        c
-        ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r
-        -o
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr)
-
-    if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE) # This currently only works on
-                                                 # Windows Subsystem for Linux
-                                                 # (WSL)
+    if(IS_WSL)
       execute_process(
-        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/sh/check-if-wsl.sh
-        OUTPUT_VARIABLE IS_WSL
+        COMMAND wslpath -m "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr"
+        OUTPUT_VARIABLE RR_WIN_PATH
         OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-      if(IS_WSL)
-        execute_process(
-          COMMAND wslpath -m "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr"
-          OUTPUT_VARIABLE RR_WIN_PATH
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
+      set(RRC_WIN_PATH "${RR_WIN_PATH}c")
 
-        set(RRC_WIN_PATH "${RR_WIN_PATH}c")
-
-        set(CMD_GENERATE_RRC ${AFX_REZ} ${RR_WIN_PATH} ${RRC_WIN_PATH})
-      else()
-        message(
-          FATAL_ERROR
-            "Not inside WSL. Running PiPLtool.exe is required for the build. Only WSL is currently supported."
-        )
-      endif()
+      set(CMD_GENERATE_RRC ${AFX_REZ} ${RR_WIN_PATH} ${RRC_WIN_PATH})
+    else()
+      message(
+        FATAL_ERROR
+          "Not inside WSL. Running PiPLtool.exe is required for the build. Only WSL is currently supported."
+      )
     endif()
+  endif()
 
-    set(CMD_GENERATE_RC
-        ${CMAKE_CXX_COMPILER}
-        -D
-        'MSWindows'
-        -E
-        -P
-        -x
-        c
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
-        -o
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc)
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    separate_arguments(
+      CMD_GENERATE_RR WINDOWS_COMMAND
+      "${CMAKE_CXX_COMPILER} /I \"${AESDK_ROOT}/Headers\" /EP "
+      "\"${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r\" > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr"
+    )
+
+    separate_arguments(
+      CMD_GENERATE_RC WINDOWS_COMMAND
+      "${CMAKE_CXX_COMPILER} /D \"MSWindows\" /EP "
+      "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc > ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc"
+    )
+  elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL
+                                                 "Clang")
+    separate_arguments(
+      CMD_GENERATE_RR
+      UNIX_COMMAND
+      "${CMAKE_CXX_COMPILER} -I \"${AESDK_ROOT}/Headers\" -E -P -x c \
+      ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.r -o ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr"
+    )
+
+    separate_arguments(
+      CMD_GENERATE_RC
+      UNIX_COMMAND
+      "${CMAKE_CXX_COMPILER} -D \"MSWindows\" -E -P -x c \
+      ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc -o ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc"
+    )
   endif()
 
   add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rr
@@ -116,6 +100,7 @@ if(WIN32)
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rrc
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc
     COMMAND ${CMD_GENERATE_RC})
+
   target_sources(${PROJECT_NAME}
                  PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.rc)
 elseif(APPLE)
@@ -179,7 +164,7 @@ elseif(APPLE)
     # create debug symbols
     add_custom_command(
       TARGET ${PROJECT_NAME}
-      POST_BUILD USES_TERMINAL
+      POsT_BUILD USES_TERMINAL
       COMMAND
         dsymutil
         ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.plugin/Contents/MacOS/${PROJECT_NAME}
