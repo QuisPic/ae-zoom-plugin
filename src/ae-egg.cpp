@@ -157,21 +157,16 @@ std::optional<ViewPano> AeEgg::getViewPano() {
 
   if (externalSymbolsOpt) {
     auto extSymbols = externalSymbolsOpt.value();
+    BEE_Item *bee_item = extSymbols->GetActiveItemFn();
 
-    extSymbols->GetCurrentItemFn(extSymbols->gEgg, nullptr, &view_pano);
+    if (bee_item) {
+      CItem *c_item = extSymbols->GetCItemFn(bee_item, false);
 
-    if (!view_pano) {
-      BEE_Item *bee_item = extSymbols->GetActiveItemFn();
+      if (c_item) {
+        CDirProjItem *dir_item = extSymbols->GetMRUItemDirFn(c_item);
 
-      if (bee_item) {
-        CItem *c_item = extSymbols->GetCItemFn(bee_item, false);
-
-        if (c_item) {
-          CDirProjItem *dir_item = extSymbols->GetMRUItemDirFn(c_item);
-
-          if (dir_item) {
-            view_pano = extSymbols->GetMRUItemPanoFn(dir_item);
-          }
+        if (dir_item) {
+          view_pano = extSymbols->GetMRUItemPanoFn(dir_item);
         }
       }
     }
