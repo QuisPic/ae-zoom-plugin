@@ -50,7 +50,6 @@ typedef BEE_Item *(*GetActiveItem)();
 typedef CItem *(*GetCItem)(BEE_Item *, bool);
 typedef CDirProjItem *(*GetMRUItemDir)(CItem *);
 typedef CPanoProjItem *(*GetMRUItemPano)(CDirProjItem *);
-typedef void (*GetCurrentItem)(CEggApp *, BEE_Item **, CPanoProjItem **);
 typedef M_Point (*CoordXf)(CPanoProjItem *, M_Point *, FEE_CoordFxType,
                            M_Point);
 
@@ -85,7 +84,6 @@ public:
     GetCItem GetCItemFn = nullptr;
     GetMRUItemDir GetMRUItemDirFn = nullptr;
     GetMRUItemPano GetMRUItemPanoFn = nullptr;
-    GetCurrentItem GetCurrentItemFn = nullptr;
     CoordXf CoordXfFn = nullptr;
     GetLocalMouse GetLocalMouseFn = nullptr;
     PointFrameToFloatSource PointFrameToFloatSourceFn = nullptr;

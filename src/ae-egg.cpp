@@ -104,8 +104,6 @@ void ExternalSymbols::load() {
                               MangledNames::GetMRUItemDir(ae_major_version)));
   SYMB_ERR(loadExternalSymbol(mSymbols.GetMRUItemPanoFn,
                               MangledNames::GetMRUItemPano(ae_major_version)));
-  SYMB_ERR(loadExternalSymbol(mSymbols.GetCurrentItemFn,
-                              MangledNames::GetCurrentItem(ae_major_version)));
   SYMB_ERR(loadExternalSymbol(mSymbols.CoordXfFn,
                               MangledNames::CoordXf(ae_major_version)));
   SYMB_ERR(loadExternalSymbol(mSymbols.GetLocalMouseFn,
