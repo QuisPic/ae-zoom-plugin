@@ -20,8 +20,13 @@ add_subdirectory(extern)
 
 add_library(
   ${PROJECT_NAME} MODULE
-  "src/ae-zoom.cpp" "src/ae-egg.cpp" "src/mangled-names/mangled-names.h"
-  "src/mangled-names/mangled-names.cpp" "include/logger.h")
+  "src/ae-zoom.cpp"
+  "src/ae-egg.cpp"
+  "src/mangled-names/mangled-names.h"
+  "src/mangled-names/mangled-names.cpp"
+  "include/logger.h"
+  "src/experimental-options/experimental-options.h"
+  "src/experimental-options/experimental-options.cpp")
 
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 

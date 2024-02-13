@@ -1,5 +1,5 @@
-#include "AEConfig.h"
 #include "mangled-names.h"
+#include "AEConfig.h"
 
 const std::string MangledNames::gEgg(const A_long major_version) {
 #ifdef AE_OS_WIN
@@ -242,5 +242,16 @@ const std::string MangledNames::GetPosition(const A_long major_version) {
     return "_ZN9CPanorama11GetPositionEP6LongPt";
     break;
   }
+#endif
+}
+
+const std::string MangledNames::GetPaneAtCursor(const A_long major_version) {
+#ifdef AE_OS_WIN
+  switch (major_version) {
+  default:
+    return "?GetPaneAtCursor@CDesktopPlus@@QEAAPEAVCPane@@UM_Point@@@Z";
+    break;
+  }
+#elifdef AE_OS_MAC
 #endif
 }

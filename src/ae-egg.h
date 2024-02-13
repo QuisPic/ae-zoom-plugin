@@ -2,8 +2,10 @@
 
 #include "A.h"
 #include "AEConfig.h"
-#include <nlohmann/json.hpp>
+#include "experimental-options/experimental-options.h"
+#include <cstdint>
 #include <optional>
+#include <string>
 #include <uiohook.h>
 
 #ifdef AE_OS_MAC
@@ -43,6 +45,7 @@ class CItem;
 class CPanorama;
 class CPanoProjItem;
 class CDirProjItem;
+class CDesktopPlus;
 
 class CEggApp;
 
@@ -67,14 +70,14 @@ typedef double (*GetFloatZoom)(CPanoProjItem *);
 typedef short (*GetWidth)(CPanoProjItem *);
 typedef short (*GetHeight)(CPanoProjItem *);
 typedef void (*ScrollTo)(CPanoProjItem *, LongPt *, bool);
+typedef bool (*MemberOfCPanoProjItem)(CDesktopPlus *, M_Point);
+typedef CPane *(*GetPaneAtCursor)(CDesktopPlus *, M_Point);
 
 #ifdef AE_OS_WIN
 typedef void (*GetPosition)(CPanoProjItem *, LongPt *);
 #elifdef AE_OS_MAC
 typedef LongPt (*GetPosition)(CPanoProjItem *, LongPt *);
 #endif
-
-enum class ZOOM_AROUND { PANEL_CENTER, CURSOR_POSTION };
 
 class ExternalSymbols {
 public:
@@ -93,6 +96,7 @@ public:
     GetHeight GetHeightFn = nullptr;
     ScrollTo ScrollToFn = nullptr;
     GetPosition GetPositionFn = nullptr;
+    GetPaneAtCursor GetPaneAtCursorFn = nullptr;
   };
 
 private:
@@ -139,37 +143,19 @@ public:
 
 class AeEgg {
 private:
+  std::optional<int64_t> CPanoProjItemBasePtr;
   DoublePt last_view_pos = {999999.0, 999999.0};
+  std::optional<CPanoProjItem *> getActiveViewPanoPtr();
+  std::optional<CPanoProjItem *> getViewPanoUnderCursorPtr();
 
 public:
   ExternalSymbols extSymbols;
 
+  std::optional<int64_t> getCPanoProjItemBasePtr();
   std::optional<ViewPano> getViewPano();
   bool isMouseInsideViewPano();
   void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
 
   AeEgg() = default;
   AeEgg(A_long ae_major_version) : extSymbols(ae_major_version){};
-};
-
-struct ViewPositionExperimentalOption {
-  bool enabled;
-  ZOOM_AROUND zoomAround;
-
-  ViewPositionExperimentalOption()
-      : enabled(false), zoomAround(ZOOM_AROUND::PANEL_CENTER){};
-
-  NLOHMANN_DEFINE_TYPE_INTRUSIVE(ViewPositionExperimentalOption, enabled,
-                                 zoomAround);
-};
-
-struct ExperimentalOptions {
-  bool detectCursorInsideView;
-  ViewPositionExperimentalOption fixViewportPosition;
-
-  ExperimentalOptions()
-      : detectCursorInsideView(false), fixViewportPosition(){};
-
-  NLOHMANN_DEFINE_TYPE_INTRUSIVE(ExperimentalOptions, detectCursorInsideView,
-                                 fixViewportPosition);
 };

@@ -20,4 +20,5 @@ public:
   static const std::string GetHeight(const A_long major_version);
   static const std::string ScrollTo(const A_long major_version);
   static const std::string GetPosition(const A_long major_version);
+  static const std::string GetPaneAtCursor(const A_long major_version);
 };

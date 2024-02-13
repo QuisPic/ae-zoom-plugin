@@ -240,13 +240,12 @@ std::optional<CPanoProjItem *> AeEgg::getActiveViewPanoPtr() {
   return std::nullopt;
 }
 
-std::optional<int64_t> AeEgg::getCPanoProjItemBasePtr() {
+std::optional<CPanoProjItem *> AeEgg::getCPanoProjItemBasePtr() {
   if (!CPanoProjItemBasePtr) {
     auto activeViewPanoPtr = getActiveViewPanoPtr();
 
     if (activeViewPanoPtr) {
-      CPanoProjItemBasePtr =
-          *reinterpret_cast<int64_t *>(activeViewPanoPtr.value());
+      CPanoProjItemBasePtr = activeViewPanoPtr.value();
     }
   }
 
@@ -271,7 +270,8 @@ std::optional<CPanoProjItem *> AeEgg::getViewPanoUnderCursorPtr() {
     auto CPanoProjItemBasePtr = getCPanoProjItemBasePtr();
 
     if (cpane && CPanoProjItemBasePtr &&
-        *reinterpret_cast<int64_t *>(cpane) == CPanoProjItemBasePtr.value()) {
+        reinterpret_cast<CPanoProjItem *>(cpane) ==
+            CPanoProjItemBasePtr.value()) {
       view_pano = reinterpret_cast<CPanoProjItem *>(cpane);
     }
   }

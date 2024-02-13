@@ -3,13 +3,14 @@
 #include "AE_Macros.h"
 #include "ExternalObject/SoSharedLibDefs.h"
 #include "ae-egg.h"
+#include "experimental-options/experimental-options.h"
 #include "logger.h"
 #include <atomic>
+#include <cstdint>
 #include <exception>
 #include <future>
 #include <mutex>
 #include <optional>
-#include <ranges>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -49,7 +50,6 @@ static std::mutex S_zoom_action_mutex;
 static std::mutex S_log_mutex;
 
 static AeEgg S_ae_egg;
-static ExperimentalOptions S_experimental_options;
 
 static std::string zoom_increment_js = {
 #include "JS/zoom-increment.js"
@@ -201,7 +201,7 @@ static A_Err ReadExperimentalOptions() {
   A_Err err = A_Err_NONE;
 
   ERR(ReadAndStoreSetting(
-      &S_experimental_options, "experimental",
+      &gExperimentalOptions, "experimental",
       "\n\nCan't read Zoom experimental options. Please save the experimental "
       "options again using Zoom script.\n"));
 
@@ -347,10 +347,11 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
       bool key_bind_found = false;
 
       for (KeyBindAction &kbind : S_key_bindings) {
-        if (current_key_codes == kbind.keyCodes &&
-            (S_experimental_options.detectCursorInsideView
-                 ? S_ae_egg.isMouseInsideViewPano()
-                 : true)) {
+        if (current_key_codes == kbind.keyCodes) {
+          // (gExperimentalOptions.detectCursorInsideView
+          //      ? S_ae_egg.isMouseInsideViewPano()
+          //      : true))
+
           std::lock_guard lock(S_zoom_action_mutex);
           S_zoom_actions.push_back(&kbind);
 
@@ -538,17 +539,17 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
     const std::lock_guard lock(S_zoom_action_mutex);
     for (const auto act : S_zoom_actions) {
-      if (S_experimental_options.fixViewportPosition.enabled) {
+      if (gExperimentalOptions.fixViewportPosition.enabled) {
         switch (act->action) {
         case KB_ACTION::INCREASE:
           S_ae_egg.incrementViewZoomFixed(
               act->amount / 100.0,
-              S_experimental_options.fixViewportPosition.zoomAround);
+              gExperimentalOptions.fixViewportPosition.zoomAround);
           break;
         case KB_ACTION::DECREASE:
           S_ae_egg.incrementViewZoomFixed(
               -act->amount / 100.0,
-              S_experimental_options.fixViewportPosition.zoomAround);
+              gExperimentalOptions.fixViewportPosition.zoomAround);
           break;
         default:
           break;
@@ -595,8 +596,26 @@ static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
 
   if (command == hack_cmd) {
     AEGP_SuiteHandler suites(sP);
+    auto view_pano = S_ae_egg.getViewPano();
+    auto extSymbols = S_ae_egg.extSymbols.get();
+    std::string msg_str = "NO view_pano";
 
-    // suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
+    if (view_pano) {
+      POINT cursor_pos;
+      GetCursorPos(&cursor_pos);
+      auto cpane = extSymbols.value()->GetPaneAtCursorFn(
+          nullptr,
+          {static_cast<short>(cursor_pos.y), static_cast<short>(cursor_pos.x)});
+
+      msg_str = "Pane under cursor address: " +
+                std::to_string(reinterpret_cast<int64_t>(cpane));
+
+      msg_str +=
+          "\nActive pane address: " +
+          std::to_string(reinterpret_cast<int64_t>(view_pano.value().pano));
+    }
+
+    suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
     *handledPB = true;
   }
 
