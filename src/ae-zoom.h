@@ -55,22 +55,22 @@ public:
 
   KeyCodes(uiohook_event *e) {
     type = e->type;
-    mask = e->mask;
+    mask = 0x0;
 
     // make the mask accept both left and right buttons
-    if (mask & (MASK_CTRL)) {
+    if (e->mask & (MASK_CTRL)) {
       mask |= MASK_CTRL;
     }
 
-    if (mask & (MASK_META)) {
+    if (e->mask & (MASK_META)) {
       mask |= MASK_META;
     }
 
-    if (mask & (MASK_SHIFT)) {
+    if (e->mask & (MASK_SHIFT)) {
       mask |= MASK_SHIFT;
     }
 
-    if (mask & (MASK_ALT)) {
+    if (e->mask & (MASK_ALT)) {
       mask |= MASK_ALT;
     }
 
