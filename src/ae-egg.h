@@ -133,29 +133,31 @@ public:
   short getCPaneHeight();
   M_Point getMouseRelativeToComp();
   LongPt getMouseRelativeToViewPano();
+  double getZoom();
+  void setZoom(double zoom_value);
+  void incrementZoomFixed(double zoom_delta);
 
   CPanoProjItem *pano;
-  ExternalSymbols::SymbolPointers extSymbols;
+  ExternalSymbols::SymbolPointers *extSymbols;
+  DoublePt last_view_pos = {999999.0, 999999.0};
 
-  ViewPano(CPanoProjItem *pano, ExternalSymbols::SymbolPointers extSymbols)
+  ViewPano(CPanoProjItem *pano, ExternalSymbols::SymbolPointers *extSymbols)
       : pano(pano), extSymbols(extSymbols) {}
 };
 
 class AeEgg {
 private:
   std::optional<int64_t> CPanoProjItemBasePtr;
-  DoublePt last_view_pos = {999999.0, 999999.0};
-  std::optional<CPanoProjItem *> getActiveViewPanoPtr();
-  std::optional<CPanoProjItem *> getViewPanoUnderCursorPtr();
 
 public:
   ExternalSymbols extSymbols;
 
   std::optional<int64_t> getCPanoProjItemBasePtr();
-  std::optional<ViewPano> getViewPano();
-  bool isMouseInsideViewPano();
-  void incrementViewZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
+  std::optional<ViewPano> getActiveViewPano();
+  std::optional<ViewPano> getViewPanoUnderCursor();
 
   AeEgg() = default;
   AeEgg(A_long ae_major_version) : extSymbols(ae_major_version){};
 };
+
+extern AeEgg gAeEgg;
