@@ -5,6 +5,7 @@
 #include "ae-egg.h"
 #include "experimental-options/experimental-options.h"
 #include "logger.h"
+#include "uiohook.h"
 #include <atomic>
 #include <cstdint>
 #include <exception>
@@ -310,23 +311,34 @@ bool IsCursorOnMainWindow() {
 void dispatch_proc(uiohook_event *const event, void *user_data) {
   static uint16_t last_key_code = VC_UNDEFINED;
 
+  if (event->type == EVENT_KEY_RELEASED &&
+      event->data.keyboard.keycode == last_key_code) {
+    last_key_code = VC_UNDEFINED;
+  }
+
   if (event->type == EVENT_HOOK_ENABLED &&
       S_zoom_status_future.wait_for(std::chrono::seconds(0)) !=
           std::future_status::ready) {
     auto zoom_status_promise =
         std::bit_cast<std::promise<ZOOM_STATUS> *>(user_data);
     zoom_status_promise->set_value(ZOOM_STATUS::INITIALIZED);
-  } else if (event->type == EVENT_KEY_PRESSED ||
-             event->type == EVENT_MOUSE_WHEEL ||
-             event->type == EVENT_MOUSE_PRESSED) {
-    if (S_is_creating_key_bind && isMainWindowActive()) {
+  } else if (S_is_creating_key_bind) {
+#ifdef AE_OS_WIN
+    // stop event propagation for Escape because it must close the Key
+    // Capture window and it may accidentally stop extendscript execution
+    // if passed to AE
+    if ((event->type == EVENT_KEY_PRESSED || event->type == EVENT_KEY_TYPED ||
+         event->type == EVENT_KEY_RELEASED) &&
+        event->data.keyboard.keycode == VC_ESCAPE) {
+      event->reserved = 0x1;
+    }
+#endif
+
+    if (event->type == EVENT_KEY_PRESSED ||
+        event->type == EVENT_MOUSE_PRESSED ||
+        event->type == EVENT_MOUSE_WHEEL) {
       if (event->type == EVENT_KEY_PRESSED) {
-        if (event->data.keyboard.keycode == VC_ESCAPE) {
-          // stop event propagation for Escape because it must close the Key
-          // Capture window and it may accidentally stop extendscript execution
-          // if passed to AE
-          event->reserved = 0x1;
-        } else if (last_key_code == event->data.keyboard.keycode) {
+        if (last_key_code == event->data.keyboard.keycode) {
           return;
         } else {
           last_key_code = event->data.keyboard.keycode;
@@ -337,46 +349,43 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
       S_key_codes_pass.emplace(event);
 
       S_call_idle_routines();
-    } else if (((event->type == EVENT_KEY_PRESSED && isMainWindowActive()) ||
-                ((event->type == EVENT_MOUSE_PRESSED ||
-                  event->type == EVENT_MOUSE_WHEEL) &&
-                 IsCursorOnMainWindow()))) {
-      KeyCodes current_key_codes(event);
-      bool key_bind_found = false;
+    }
+  } else if (((event->type == EVENT_KEY_PRESSED && isMainWindowActive()) ||
+              ((event->type == EVENT_MOUSE_PRESSED ||
+                event->type == EVENT_MOUSE_WHEEL) &&
+               IsCursorOnMainWindow()))) {
+    KeyCodes current_key_codes(event);
+    bool key_bind_found = false;
 
-      for (KeyBindAction &kbind : S_key_bindings) {
-        if (current_key_codes == kbind.keyCodes) {
-          std::lock_guard lock(S_zoom_action_mutex);
-          S_zoom_actions.push_back(&kbind);
+    for (KeyBindAction &kbind : S_key_bindings) {
+      if (current_key_codes == kbind.keyCodes) {
+        std::lock_guard lock(S_zoom_action_mutex);
+        S_zoom_actions.push_back(&kbind);
 
-          key_bind_found = true;
-        }
-      }
-
-      // stop event propagation on all AE's default key bindings that change
-      // viewport zoom
-      if (key_bind_found &&
-          (event->type == EVENT_MOUSE_WHEEL ||
-           current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_COMMA} ||
-           current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_PERIOD} ||
-#ifdef AE_OS_WIN
-           current_key_codes ==
-               KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_MINUS} ||
-           current_key_codes ==
-               KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_EQUALS}))
-#elif defined AE_OS_MAC
-           current_key_codes ==
-               KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_MINUS} ||
-           current_key_codes ==
-               KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_EQUALS}))
-#endif
-      {
-        event->reserved = 0x1; // stop event propagation
+        key_bind_found = true;
       }
     }
-  } else if (S_is_creating_key_bind && event->type == EVENT_KEY_RELEASED &&
-             event->data.keyboard.keycode == last_key_code) {
-    last_key_code = VC_UNDEFINED;
+
+    // stop event propagation on all AE's default key bindings that change
+    // viewport zoom
+    if (key_bind_found &&
+        (event->type == EVENT_MOUSE_WHEEL ||
+         current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_COMMA} ||
+         current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_PERIOD} ||
+#ifdef AE_OS_WIN
+         current_key_codes ==
+             KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_MINUS} ||
+         current_key_codes ==
+             KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_EQUALS}))
+#elif defined AE_OS_MAC
+         current_key_codes ==
+             KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_MINUS} ||
+         current_key_codes ==
+             KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_EQUALS}))
+#endif
+    {
+      event->reserved = 0x1; // stop event propagation
+    }
   }
 }
 
