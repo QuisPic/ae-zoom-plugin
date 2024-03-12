@@ -185,8 +185,7 @@ static A_Err ReadAndStoreSetting(T *storage, const std::string &key,
 
       try {
         json j = json::parse(std::string(buf));
-        T kek = j.get<T>();
-        *storage = kek;
+        *storage = j.get<T>();
       } catch (const json::exception &e) {
         logger(LOG_LEVEL_ERROR, exeption_str, std::string(e.what()));
       }
@@ -358,6 +357,10 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
     bool key_bind_found = false;
 
     for (KeyBindAction &kbind : S_key_bindings) {
+      if (!kbind.enabled) {
+        continue;
+      }
+
       if (current_key_codes == kbind.keyCodes) {
         std::lock_guard lock(S_zoom_action_mutex);
         S_zoom_actions.push_back(&kbind);
@@ -554,11 +557,8 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
         if (view_pano) {
           switch (act->action) {
-          case KB_ACTION::INCREASE:
+          case KB_ACTION::CHANGE:
             view_pano->incrementZoomFixed(act->amount / 100.0);
-            break;
-          case KB_ACTION::DECREASE:
-            view_pano->incrementZoomFixed(-act->amount / 100.0);
             break;
           case KB_ACTION::SET_TO: {
             auto current_zoom = view_pano->getZoom();
@@ -571,13 +571,9 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
         }
       } else {
         switch (act->action) {
-        case KB_ACTION::INCREASE:
+        case KB_ACTION::CHANGE:
           script_str =
               zoom_increment_js + "(" + std::to_string(act->amount) + ")";
-          break;
-        case KB_ACTION::DECREASE:
-          script_str =
-              zoom_increment_js + "(" + std::to_string(-act->amount) + ")";
           break;
         case KB_ACTION::SET_TO:
           script_str = zoom_set_to_js + "(" + std::to_string(act->amount) + ")";
@@ -668,14 +664,14 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
         suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
 
     ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&hack_cmd));
-    ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(
-        hack_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION,
-        AEGP_MENU_INSERT_AT_BOTTOM));
-    ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(
-        S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
-
-    ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(
-        S_zoom_id, UpdateMenuHook, 0));
+    // ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(
+    //     hack_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION,
+    //     AEGP_MENU_INSERT_AT_BOTTOM));
+    // ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(
+    //     S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));
+    //
+    // ERR(suites.RegisterSuite5()->AEGP_RegisterUpdateMenuHook(
+    //     S_zoom_id, UpdateMenuHook, 0));
 
     ERR(suites.RegisterSuite5()->AEGP_RegisterIdleHook(S_zoom_id, IdleHook, 0));
     ERR(suites.RegisterSuite5()->AEGP_RegisterDeathHook(S_zoom_id, DeathHook,

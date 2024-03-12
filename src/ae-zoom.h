@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include "AEConfig.h"
+#include <string>
 
 #ifdef AE_OS_WIN
 #include <windows.h>
@@ -37,7 +37,7 @@ public:
 
 enum class WIND_RECT { FULL, CLIENT };
 
-enum class KB_ACTION { INCREASE, DECREASE, SET_TO };
+enum class KB_ACTION { CHANGE, SET_TO };
 
 enum class ZOOM_STATUS { INITIALIZATION_ERROR, INITIALIZED, FINISHED };
 
@@ -98,15 +98,17 @@ public:
 
 class KeyBindAction {
 public:
+  bool enabled;
   KeyCodes keyCodes;
   KB_ACTION action;
   double amount;
 
   KeyBindAction() = default;
-  KeyBindAction(const KeyCodes &keyCodes, const KB_ACTION &action,
-                double amount)
-      : keyCodes(keyCodes), action(action), amount(amount) {}
+  KeyBindAction(const bool enabled, const KeyCodes &keyCodes,
+                const KB_ACTION &action, double amount)
+      : enabled(enabled), keyCodes(keyCodes), action(action), amount(amount) {}
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(KeyCodes, type, mask, keycode);
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(KeyBindAction, keyCodes, action, amount);
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(KeyBindAction, enabled, keyCodes, action,
+                                   amount);
