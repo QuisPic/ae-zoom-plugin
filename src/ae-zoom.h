@@ -91,7 +91,7 @@ public:
   }
 
   bool operator==(const KeyCodes &other) const {
-    return type == other.type && (mask == other.mask || (mask & other.mask)) &&
+    return type == other.type && mask == other.mask &&
            keycode == other.keycode;
   }
 };
