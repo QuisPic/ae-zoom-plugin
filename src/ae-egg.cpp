@@ -1,10 +1,13 @@
 #include "ae-egg.h"
-#include "experimental-options/experimental-options.h"
 #include "logger.h"
 #include "mangled-names/mangled-names.h"
-#include <CoreGraphics/CoreGraphics.h>
+#include "options/options.h"
 #include <cstdint>
 #include <optional>
+
+#ifdef AE_OS_MAC
+#include <CoreGraphics/CoreGraphics.h>
+#endif
 
 AeEgg gAeEgg;
 
@@ -211,6 +214,10 @@ void ViewPano::setZoom(double zoom_value) {
 void ViewPano::incrementZoomFixed(double zoom_delta) {
   double current_zoom = getZoom();
   double new_zoom = current_zoom + zoom_delta;
+
+  if (new_zoom < 0.008) {
+    new_zoom = 0.008;
+  }
 
   auto actual_view_pos = getViewPanoPosition();
 

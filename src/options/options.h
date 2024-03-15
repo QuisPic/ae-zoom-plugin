@@ -25,4 +25,14 @@ struct ExperimentalOptions {
                                  fixViewportPosition);
 };
 
+struct HighDpiOptions {
+  bool enabled;
+  float scale;
+
+  HighDpiOptions() : enabled(false), scale(2) {}
+
+  NLOHMANN_DEFINE_TYPE_INTRUSIVE(HighDpiOptions, enabled, scale);
+};
+
 extern ExperimentalOptions gExperimentalOptions;
+extern HighDpiOptions gHighDpiOptions;

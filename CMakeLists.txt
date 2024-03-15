@@ -25,8 +25,8 @@ add_library(
   "src/mangled-names/mangled-names.h"
   "src/mangled-names/mangled-names.cpp"
   "include/logger.h"
-  "src/experimental-options/experimental-options.h"
-  "src/experimental-options/experimental-options.cpp")
+  "src/options/options.h"
+  "src/options/options.cpp")
 
 target_include_directories(${PROJECT_NAME} PRIVATE include)
 

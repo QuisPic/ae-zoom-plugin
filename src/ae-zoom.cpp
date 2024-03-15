@@ -3,8 +3,8 @@
 #include "AE_Macros.h"
 #include "ExternalObject/SoSharedLibDefs.h"
 #include "ae-egg.h"
-#include "experimental-options/experimental-options.h"
 #include "logger.h"
+#include "options/options.h"
 #include "uiohook.h"
 #include <atomic>
 #include <cstdint>
@@ -198,9 +198,21 @@ static A_Err ReadAndStoreSetting(T *storage, const std::string &key,
 static A_Err ReadExperimentalOptions() {
   A_Err err = A_Err_NONE;
 
+  ERR(ReadAndStoreSetting(&gExperimentalOptions, "experimental",
+                          "\n\nCan't read Zoom \"Experimental\" options. "
+                          "Please save the \"Experimental\" "
+                          "options again using Zoom script.\n"));
+
+  return err;
+}
+
+static A_Err ReadHighDpiOptions() {
+  A_Err err = A_Err_NONE;
+
   ERR(ReadAndStoreSetting(
-      &gExperimentalOptions, "experimental",
-      "\n\nCan't read Zoom experimental options. Please save the experimental "
+      &gHighDpiOptions, "highDPI",
+      "\n\nCan't read Zoom \"High DPI Display Support\" "
+      "options. Please save the \"High DPI Display Support\" "
       "options again using Zoom script.\n"));
 
   return err;
@@ -210,8 +222,8 @@ static A_Err ReadKeyBindings() {
   A_Err err = A_Err_NONE;
 
   ERR(ReadAndStoreSetting(&S_key_bindings, "keyBindings",
-                          "\n\nCan't read Zoom keybindings. Please save the "
-                          "keybindings again using Zoom script.\n"));
+                          "\n\nCan't read Zoom Key Bindings. Please save "
+                          "Key Bindings again using Zoom script.\n"));
 
   return err;
 }
@@ -545,6 +557,10 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
     const std::lock_guard lock(S_zoom_action_mutex);
     for (const auto act : S_zoom_actions) {
+      double zoomValue = gHighDpiOptions.enabled
+                             ? act->amount / gHighDpiOptions.scale
+                             : act->amount;
+
       if (gExperimentalOptions.fixViewportPosition.enabled) {
         std::optional<ViewPano> view_pano;
         if (gExperimentalOptions.detectCursorInsideView &&
@@ -558,11 +574,11 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
         if (view_pano) {
           switch (act->action) {
           case KB_ACTION::CHANGE:
-            view_pano->incrementZoomFixed(act->amount / 100.0);
+            view_pano->incrementZoomFixed(zoomValue / 100.0);
             break;
           case KB_ACTION::SET_TO: {
             auto current_zoom = view_pano->getZoom();
-            view_pano->incrementZoomFixed(act->amount / 100.0 - current_zoom);
+            view_pano->incrementZoomFixed(zoomValue / 100.0 - current_zoom);
             break;
           }
           default:
@@ -573,10 +589,10 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
         switch (act->action) {
         case KB_ACTION::CHANGE:
           script_str =
-              zoom_increment_js + "(" + std::to_string(act->amount) + ")";
+              zoom_increment_js + "(" + std::to_string(zoomValue) + ")";
           break;
         case KB_ACTION::SET_TO:
-          script_str = zoom_set_to_js + "(" + std::to_string(act->amount) + ")";
+          script_str = zoom_set_to_js + "(" + std::to_string(zoomValue) + ")";
           break;
         default:
           break;
@@ -685,6 +701,7 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
 
     ERR(ReadKeyBindings());
     ERR(ReadExperimentalOptions());
+    ERR(ReadHighDpiOptions());
 
     gAeEgg = AeEgg(major_versionL);
 
@@ -839,6 +856,14 @@ extern "C" DllExport long updateKeyBindings(TaggedData *argv, long argc,
 extern "C" DllExport long updateExperimentalOptions(TaggedData *argv, long argc,
                                                     TaggedData *retval) {
   try_catch([&retval]() { ReadExperimentalOptions(); });
+
+  return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long updateHighDpiOptions(TaggedData *argv, long argc,
+                                               TaggedData *retval) {
+  try_catch([&retval]() { ReadHighDpiOptions(); });
 
   return kESErrOK;
 }
