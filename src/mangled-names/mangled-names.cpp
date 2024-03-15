@@ -253,5 +253,10 @@ const std::string MangledNames::GetPaneAtCursor(const A_long major_version) {
     break;
   }
 #elifdef AE_OS_MAC
+  switch (major_version) {
+  default:
+    return "_ZN12CDesktopPlus15GetPaneAtCursorE7M_Point";
+    break;
+  }
 #endif
 }

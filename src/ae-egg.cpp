@@ -2,6 +2,7 @@
 #include "experimental-options/experimental-options.h"
 #include "logger.h"
 #include "mangled-names/mangled-names.h"
+#include <CoreGraphics/CoreGraphics.h>
 #include <cstdint>
 #include <optional>
 
@@ -183,7 +184,7 @@ M_Point ViewPano::getMouseRelativeToComp() {
   M_Point comp_mouse;
   extSymbols->GetLocalMouseFn(pano, &comp_mouse);
 #elifdef AE_OS_MAC
-  auto comp_mouse = extSymbols.GetLocalMouseFn(pano);
+  auto comp_mouse = extSymbols->GetLocalMouseFn(pano);
 #endif
 
   return comp_mouse;
@@ -316,14 +317,17 @@ std::optional<ViewPano> AeEgg::getViewPanoUnderCursor() {
   auto externalSymbolsOpt = extSymbols.get();
 
   if (externalSymbolsOpt) {
-    // auto extSymbols = externalSymbolsOpt.value();
 #ifdef AE_OS_WIN
-    POINT win_cursor_pos;
-    GetCursorPos(&win_cursor_pos);
-    M_Point cursor_pos = {static_cast<short>(win_cursor_pos.y),
-                          static_cast<short>(win_cursor_pos.x)};
+    POINT native_cursor_pos;
+    GetCursorPos(&native_cursor_pos);
 #elifdef AE_OS_MAC
+    CGEventRef event = CGEventCreate(NULL);
+    CGPoint native_cursor_pos = CGEventGetLocation(event);
+    CFRelease(event);
 #endif
+
+    M_Point cursor_pos = {static_cast<short>(native_cursor_pos.y),
+                          static_cast<short>(native_cursor_pos.x)};
 
     auto cpane =
         externalSymbolsOpt.value()->GetPaneAtCursorFn(nullptr, cursor_pos);
