@@ -169,7 +169,7 @@ elseif(APPLE)
     # create debug symbols
     add_custom_command(
       TARGET ${PROJECT_NAME}
-      POsT_BUILD USES_TERMINAL
+      POST_BUILD USES_TERMINAL
       COMMAND
         dsymutil
         ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.plugin/Contents/MacOS/${PROJECT_NAME}
