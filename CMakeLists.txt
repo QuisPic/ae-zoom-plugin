@@ -143,6 +143,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE AESDK uiohook
                                               nlohmann_json::nlohmann_json)
 
 if(WIN32)
+  set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
   set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".aex")
 
   install(FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.aex"
