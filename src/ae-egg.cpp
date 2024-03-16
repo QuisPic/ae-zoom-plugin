@@ -1,7 +1,6 @@
 #include "ae-egg.h"
 #include "logger.h"
 #include "mangled-names/mangled-names.h"
-#include "options/options.h"
 #include <cstdint>
 #include <optional>
 
@@ -211,7 +210,7 @@ void ViewPano::setZoom(double zoom_value) {
                              true);
 }
 
-void ViewPano::incrementZoomFixed(double zoom_delta) {
+void ViewPano::incrementZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
   double current_zoom = getZoom();
   double new_zoom = current_zoom + zoom_delta;
 
@@ -231,7 +230,7 @@ void ViewPano::incrementZoomFixed(double zoom_delta) {
   DoublePt zoom_pt;
   DoublePt dist_to_zoom_pt;
 
-  switch (gExperimentalOptions.fixViewportPosition.zoomAround) {
+  switch (zoom_around) {
   case ZOOM_AROUND::PANEL_CENTER: {
     double cpane_width2 = getCPaneWidth() / 2.0;
     double cpane_height2 = getCPaneHeight() / 2.0;

@@ -2,6 +2,7 @@
 
 #include "A.h"
 #include "AEConfig.h"
+#include "options/options.h"
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -134,7 +135,7 @@ public:
   LongPt getMouseRelativeToViewPano();
   double getZoom();
   void setZoom(double zoom_value);
-  void incrementZoomFixed(double zoom_delta);
+  void incrementZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
 
   CPanoProjItem *pano;
   ExternalSymbols::SymbolPointers *extSymbols;

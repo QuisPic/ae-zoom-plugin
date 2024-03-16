@@ -35,7 +35,6 @@ static std::shared_future<ZOOM_STATUS> S_zoom_status_future;
 static std::optional<ZOOM_STATUS> S_zoom_status;
 static std::shared_future<int> S_iohook_future;
 static std::optional<KeyCodes> S_key_codes_pass;
-static std::vector<KeyBindAction> S_key_bindings;
 
 static AEGP_Command hack_cmd;
 
@@ -221,7 +220,7 @@ static A_Err ReadHighDpiOptions() {
 static A_Err ReadKeyBindings() {
   A_Err err = A_Err_NONE;
 
-  ERR(ReadAndStoreSetting(&S_key_bindings, "keyBindings",
+  ERR(ReadAndStoreSetting(&gKeyBindings, "keyBindings",
                           "\n\nCan't read Zoom Key Bindings. Please save "
                           "Key Bindings again using Zoom script.\n"));
 
@@ -368,7 +367,7 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
     KeyCodes current_key_codes(event);
     bool key_bind_found = false;
 
-    for (KeyBindAction &kbind : S_key_bindings) {
+    for (KeyBindAction &kbind : gKeyBindings) {
       if (!kbind.enabled) {
         continue;
       }
@@ -557,9 +556,7 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
     const std::lock_guard lock(S_zoom_action_mutex);
     for (const auto act : S_zoom_actions) {
-      double zoomValue = gHighDpiOptions.enabled
-                             ? act->amount / gHighDpiOptions.scale
-                             : act->amount;
+      double zoomValue = act->getAmount(gHighDpiOptions);
 
       if (gExperimentalOptions.fixViewportPosition.enabled) {
         std::optional<ViewPano> view_pano;
@@ -572,13 +569,23 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
         }
 
         if (view_pano) {
+          ZOOM_AROUND zoom_around = ZOOM_AROUND::PANEL_CENTER;
+
           switch (act->action) {
-          case KB_ACTION::CHANGE:
-            view_pano->incrementZoomFixed(zoomValue / 100.0);
+          case KB_ACTION::CHANGE: {
+            if (gExperimentalOptions.fixViewportPosition.zoomAround ==
+                    ZOOM_AROUND::CURSOR_POSTION &&
+                act->keyCodes.type == EVENT_MOUSE_WHEEL) {
+              zoom_around = ZOOM_AROUND::CURSOR_POSTION;
+            }
+
+            view_pano->incrementZoomFixed(zoomValue / 100.0, zoom_around);
             break;
+          }
           case KB_ACTION::SET_TO: {
             auto current_zoom = view_pano->getZoom();
-            view_pano->incrementZoomFixed(zoomValue / 100.0 - current_zoom);
+            view_pano->incrementZoomFixed(zoomValue / 100.0 - current_zoom,
+                                          zoom_around);
             break;
           }
           default:
