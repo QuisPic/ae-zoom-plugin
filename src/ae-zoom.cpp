@@ -3,9 +3,11 @@
 #include "AE_Macros.h"
 #include "ExternalObject/SoSharedLibDefs.h"
 #include "ae-egg.h"
-#include "logger.h"
-#include "options/options.h"
+#include "options.h"
 #include "uiohook.h"
+#include "zoom-actions.h"
+#include "util-functions.h"
+#include "JS/JS.h"
 #include <atomic>
 #include <cstdint>
 #include <exception>
@@ -19,10 +21,6 @@
 #ifdef AE_OS_MAC
 #include <objc/objc-runtime.h>
 #endif
-
-/* Macros for reading a file to a string at compile time */
-#define STRINGIFY(...) #__VA_ARGS__
-#define STR(...) STRINGIFY(__VA_ARGS__)
 
 static AEGP_PluginID S_zoom_id = 0L;
 static SPBasicSuite *sP = NULL;
@@ -43,23 +41,12 @@ static HWND S_main_win_h = nullptr;
 #endif
 
 static std::vector<LogMessage> log_messages;
-static std::vector<KeyBindAction> S_zoom_actions;
+// static std::vector<KeyBindAction> S_zoom_actions;
+static ZoomActions S_zoom_actions;
 
 static std::mutex S_create_key_bind_mutex;
-static std::mutex S_zoom_action_mutex;
+// static std::mutex S_zoom_action_mutex;
 static std::mutex S_log_mutex;
-
-static std::string zoom_increment_js = {
-#include "JS/zoom-increment.js"
-};
-
-static std::string zoom_set_to_js = {
-#include "JS/zoom-set-to.js"
-};
-
-static std::string pass_key_bind_js = {
-#include "JS/pass-key-bind.js"
-};
 
 /**
  * \brief Utility function to handle strings and memory clean up
@@ -373,19 +360,21 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
       }
 
       if (current_key_codes == kbind.keyCodes) {
-        std::lock_guard lock(S_zoom_action_mutex);
+        //   std::lock_guard lock(S_zoom_action_mutex);
+        //
+        //   /** Add new action only if it's different from last action in queue
+        //   */ if (!S_zoom_actions.empty() &&
+        //       S_zoom_actions.back().action == kbind.action) {
+        //     if (kbind.action == KB_ACTION::CHANGE) {
+        //       S_zoom_actions.back().amount += kbind.amount;
+        //     } else if (kbind.action == KB_ACTION::SET_TO) {
+        //       S_zoom_actions.back().amount = kbind.amount;
+        //     }
+        //   } else {
+        //     S_zoom_actions.push_back(kbind);
+        //   }
 
-        /** Add new action only if it's different from last action in queue */
-        if (!S_zoom_actions.empty() &&
-            S_zoom_actions.back().action == kbind.action) {
-          if (kbind.action == KB_ACTION::CHANGE) {
-            S_zoom_actions.back().amount += kbind.amount;
-          } else if (kbind.action == KB_ACTION::SET_TO) {
-            S_zoom_actions.back().amount = kbind.amount;
-          }
-        } else {
-          S_zoom_actions.push_back(kbind);
-        }
+        S_zoom_actions.post(kbind);
 
         key_bind_found = true;
       }
@@ -563,64 +552,69 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
   /* Changing zoom on key presses */
   if (S_zoom_actions.size() > 0) {
-    std::string script_str;
+    S_zoom_actions.runActions();
+    // const std::lock_guard lock(S_zoom_action_mutex);
 
-    const std::lock_guard lock(S_zoom_action_mutex);
-    for (const auto &act : S_zoom_actions) {
-      double zoomValue = act.getAmount(gHighDpiOptions);
-
-      if (gExperimentalOptions.fixViewportPosition.enabled) {
-        std::optional<ViewPano> view_pano;
-        if (gExperimentalOptions.detectCursorInsideView &&
-            (act.keyCodes.type == EVENT_MOUSE_CLICKED ||
-             act.keyCodes.type == EVENT_MOUSE_WHEEL)) {
-          view_pano = gAeEgg.getViewPanoUnderCursor();
-        } else {
-          view_pano = gAeEgg.getActiveViewPano();
-        }
-
-        if (view_pano) {
-          ZOOM_AROUND zoom_around = ZOOM_AROUND::PANEL_CENTER;
-
-          switch (act.action) {
-          case KB_ACTION::CHANGE: {
-            if (gExperimentalOptions.fixViewportPosition.zoomAround ==
-                    ZOOM_AROUND::CURSOR_POSTION &&
-                act.keyCodes.type == EVENT_MOUSE_WHEEL) {
-              zoom_around = ZOOM_AROUND::CURSOR_POSTION;
-            }
-
-            auto current_zoom = view_pano->getZoom();
-            view_pano->setZoomFixed(current_zoom + zoomValue / 100.0,
-                                    zoom_around);
-            break;
-          }
-          case KB_ACTION::SET_TO: {
-            view_pano->setZoomFixed(zoomValue / 100.0, zoom_around);
-            break;
-          }
-          default:
-            break;
-          }
-        }
-      } else {
-        switch (act.action) {
-        case KB_ACTION::CHANGE:
-          script_str =
-              zoom_increment_js + "(" + std::to_string(zoomValue) + ")";
-          break;
-        case KB_ACTION::SET_TO:
-          script_str = zoom_set_to_js + "(" + std::to_string(zoomValue) + ")";
-          break;
-        default:
-          break;
-        }
-
-        std::tie(err, std::ignore) = RunExtendscript(script_str);
-      }
-    }
-
-    S_zoom_actions.clear();
+    /** Lock actions queue while we iterate over it */
+    // const std::lock_guard lock(S_zoom_actions.getMutex());
+    //
+    // for (const auto &act : S_zoom_actions.actions()) {
+    //   double zoomValue = act.getAmount(gHighDpiOptions);
+    //
+    //   if (gExperimentalOptions.fixViewportPosition.enabled) {
+    //     std::optional<ViewPano> view_pano;
+    //     if (gExperimentalOptions.detectCursorInsideView &&
+    //         (act.keyCodes.type == EVENT_MOUSE_CLICKED ||
+    //          act.keyCodes.type == EVENT_MOUSE_WHEEL)) {
+    //       view_pano = gAeEgg.getViewPanoUnderCursor();
+    //     } else {
+    //       view_pano = gAeEgg.getActiveViewPano();
+    //     }
+    //
+    //     if (view_pano) {
+    //       ZOOM_AROUND zoom_around = ZOOM_AROUND::PANEL_CENTER;
+    //
+    //       switch (act.action) {
+    //       case KB_ACTION::CHANGE: {
+    //         if (gExperimentalOptions.fixViewportPosition.zoomAround ==
+    //                 ZOOM_AROUND::CURSOR_POSTION &&
+    //             act.keyCodes.type == EVENT_MOUSE_WHEEL) {
+    //           zoom_around = ZOOM_AROUND::CURSOR_POSTION;
+    //         }
+    //
+    //         auto current_zoom = view_pano->getZoom();
+    //         view_pano->setZoomFixed(current_zoom + zoomValue / 100.0,
+    //                                 zoom_around);
+    //         break;
+    //       }
+    //       case KB_ACTION::SET_TO: {
+    //         view_pano->setZoomFixed(zoomValue / 100.0, zoom_around);
+    //         break;
+    //       }
+    //       default:
+    //         break;
+    //       }
+    //     }
+    //   } else {
+    //     std::string script_str;
+    //
+    //     switch (act.action) {
+    //     case KB_ACTION::CHANGE:
+    //       script_str =
+    //           zoom_increment_js + "(" + std::to_string(zoomValue) + ")";
+    //       break;
+    //     case KB_ACTION::SET_TO:
+    //       script_str = zoom_set_to_js + "(" + std::to_string(zoomValue) + ")";
+    //       break;
+    //     default:
+    //       break;
+    //     }
+    //
+    //     std::tie(err, std::ignore) = RunExtendscript(script_str);
+    //   }
+    // }
+    //
+    // S_zoom_actions.clear();
   }
 
   return err;
@@ -925,8 +919,7 @@ extern "C" DllExport long postZoomAction(TaggedData *argv, long argc,
     kbind.action = KB_ACTION(argv[0].data.intval);
     kbind.amount = argv[1].data.fltval;
 
-    std::lock_guard lock(S_zoom_action_mutex);
-    S_zoom_actions.push_back(kbind);
+    S_zoom_actions.post(kbind);
     S_call_idle_routines();
 
     retval->data.intval = true;
