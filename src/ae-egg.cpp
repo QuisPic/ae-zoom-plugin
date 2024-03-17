@@ -6,10 +6,6 @@
 #include <CoreGraphics/CoreGraphics.h>
 #endif
 
-// template <typename T> T getVirtualFn(long long *base_addr, int offset) {
-//   return reinterpret_cast<T>(*base_addr + offset);
-// }
-
 std::optional<ViewPano> AeEgg::getActiveViewPano() {
   CPanoProjItem *view_pano = nullptr;
   auto externalSymbolsOpt = extSymbols.get();

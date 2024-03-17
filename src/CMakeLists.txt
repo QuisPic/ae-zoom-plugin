@@ -135,3 +135,50 @@ elseif(APPLE)
   target_sources(${PROJECT_NAME} PRIVATE ${RSRC_MAC_FILE})
 endif()
 
+if(WIN32)
+  set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
+  set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".aex")
+
+  install(FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.aex"
+          DESTINATION "${PLUGIN_FOLDER}/")
+elseif(APPLE)
+  set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
+  set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX "")
+
+  set_target_properties(${PROJECT_NAME} PROPERTIES BUNDLE ON)
+  set_target_properties(${PROJECT_NAME} PROPERTIES BUNDLE_EXTENSION "plugin")
+
+  # PkgInfo
+  add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/PkgInfo
+    COMMAND echo "AEgxFXTC" > ${CMAKE_BINARY_DIR}/PkgInfo)
+  set_source_files_properties(${CMAKE_BINARY_DIR}/PkgInfo
+                              PROPERTIES MACOSX_PACKAGE_LOCATION "")
+  target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/PkgInfo)
+
+  install(DIRECTORY "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.plugin"
+          DESTINATION "${PLUGIN_FOLDER}/")
+
+  if(NOT CMAKE_HOST_APPLE)
+    # create debug symbols
+    add_custom_command(
+      TARGET ${PROJECT_NAME}
+      POST_BUILD USES_TERMINAL
+      COMMAND
+        dsymutil
+        ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.plugin/Contents/MacOS/${PROJECT_NAME}
+        -o ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dSYM)
+
+    # create lldb start-up script
+    set(LLDB_REMOTE_NAME Deniss-MacBook-Air.local)
+    set(LLDB_REMOTE_PORT 16000)
+    file(
+      WRITE ${CMAKE_BINARY_DIR}/lldb-remote-start-up.txt
+      "platform select remote-macosx\n"
+      "platform connect connect://${LLDB_REMOTE_NAME}:${LLDB_REMOTE_PORT}\n"
+      "setting set target.memory-module-load-level partial\n"
+      "attach -n \"After Effects\"\n"
+      "target symbols add ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.dSYM/Contents/Resources/DWARF/${PROJECT_NAME}"
+    )
+  endif()
+endif()
