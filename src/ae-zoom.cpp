@@ -374,7 +374,18 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
 
       if (current_key_codes == kbind.keyCodes) {
         std::lock_guard lock(S_zoom_action_mutex);
-        S_zoom_actions.push_back(kbind);
+
+        /** Add new action only if it's different from last action in queue */
+        if (!S_zoom_actions.empty() &&
+            S_zoom_actions.back().action == kbind.action) {
+          if (kbind.action == KB_ACTION::CHANGE) {
+            S_zoom_actions.back().amount += kbind.amount;
+          } else if (kbind.action == KB_ACTION::SET_TO) {
+            S_zoom_actions.back().amount = kbind.amount;
+          }
+        } else {
+          S_zoom_actions.push_back(kbind);
+        }
 
         key_bind_found = true;
       }
