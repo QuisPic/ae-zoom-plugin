@@ -135,7 +135,7 @@ public:
   LongPt getMouseRelativeToViewPano();
   double getZoom();
   void setZoom(double zoom_value);
-  void incrementZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around);
+  void setZoomFixed(double zoom_value, ZOOM_AROUND zoom_around);
 
   CPanoProjItem *pano;
   ExternalSymbols::SymbolPointers *extSymbols;

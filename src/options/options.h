@@ -42,9 +42,9 @@ struct HighDpiOptions {
 
 class KeyCodes {
 public:
-  event_type type;
-  uint16_t mask;
-  uint16_t keycode;
+  event_type type = EVENT_KEY_PRESSED;
+  uint16_t mask = 0x0;
+  uint16_t keycode = VC_UNDEFINED;
 
   KeyCodes() = default;
 
@@ -98,10 +98,10 @@ public:
 
 class KeyBindAction {
 public:
-  bool enabled;
+  bool enabled = true;
   KeyCodes keyCodes;
-  KB_ACTION action;
-  double amount;
+  KB_ACTION action = KB_ACTION::CHANGE;
+  double amount = 0;
 
   double getAmount(const HighDpiOptions &highDpiOpt) const {
     return highDpiOpt.enabled ? amount / highDpiOpt.scale : amount;

@@ -43,7 +43,7 @@ static HWND S_main_win_h = nullptr;
 #endif
 
 static std::vector<LogMessage> log_messages;
-static std::vector<KeyBindAction *> S_zoom_actions;
+static std::vector<KeyBindAction> S_zoom_actions;
 
 static std::mutex S_create_key_bind_mutex;
 static std::mutex S_zoom_action_mutex;
@@ -367,14 +367,14 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
     KeyCodes current_key_codes(event);
     bool key_bind_found = false;
 
-    for (KeyBindAction &kbind : gKeyBindings) {
+    for (const KeyBindAction &kbind : gKeyBindings) {
       if (!kbind.enabled) {
         continue;
       }
 
       if (current_key_codes == kbind.keyCodes) {
         std::lock_guard lock(S_zoom_action_mutex);
-        S_zoom_actions.push_back(&kbind);
+        S_zoom_actions.push_back(kbind);
 
         key_bind_found = true;
       }
@@ -555,14 +555,14 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
     std::string script_str;
 
     const std::lock_guard lock(S_zoom_action_mutex);
-    for (const auto act : S_zoom_actions) {
-      double zoomValue = act->getAmount(gHighDpiOptions);
+    for (const auto &act : S_zoom_actions) {
+      double zoomValue = act.getAmount(gHighDpiOptions);
 
       if (gExperimentalOptions.fixViewportPosition.enabled) {
         std::optional<ViewPano> view_pano;
         if (gExperimentalOptions.detectCursorInsideView &&
-            (act->keyCodes.type == EVENT_MOUSE_CLICKED ||
-             act->keyCodes.type == EVENT_MOUSE_WHEEL)) {
+            (act.keyCodes.type == EVENT_MOUSE_CLICKED ||
+             act.keyCodes.type == EVENT_MOUSE_WHEEL)) {
           view_pano = gAeEgg.getViewPanoUnderCursor();
         } else {
           view_pano = gAeEgg.getActiveViewPano();
@@ -571,21 +571,21 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
         if (view_pano) {
           ZOOM_AROUND zoom_around = ZOOM_AROUND::PANEL_CENTER;
 
-          switch (act->action) {
+          switch (act.action) {
           case KB_ACTION::CHANGE: {
             if (gExperimentalOptions.fixViewportPosition.zoomAround ==
                     ZOOM_AROUND::CURSOR_POSTION &&
-                act->keyCodes.type == EVENT_MOUSE_WHEEL) {
+                act.keyCodes.type == EVENT_MOUSE_WHEEL) {
               zoom_around = ZOOM_AROUND::CURSOR_POSTION;
             }
 
-            view_pano->incrementZoomFixed(zoomValue / 100.0, zoom_around);
+            auto current_zoom = view_pano->getZoom();
+            view_pano->setZoomFixed(current_zoom + zoomValue / 100.0,
+                                    zoom_around);
             break;
           }
           case KB_ACTION::SET_TO: {
-            auto current_zoom = view_pano->getZoom();
-            view_pano->incrementZoomFixed(zoomValue / 100.0 - current_zoom,
-                                          zoom_around);
+            view_pano->setZoomFixed(zoomValue / 100.0, zoom_around);
             break;
           }
           default:
@@ -593,7 +593,7 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
           }
         }
       } else {
-        switch (act->action) {
+        switch (act.action) {
         case KB_ACTION::CHANGE:
           script_str =
               zoom_increment_js + "(" + std::to_string(zoomValue) + ")";
@@ -745,7 +745,8 @@ extern "C" DllExport long ESGetVersion() { return 0x1; }
  * the reflection interface.
  */
 extern "C" DllExport char *ESInitialize(const TaggedData **argv, long argc) {
-  return nullptr;
+  // return nullptr;
+  return "postZoomAction_df";
 }
 
 /**
@@ -892,6 +893,32 @@ extern "C" DllExport long endKeyCapture(TaggedData *argv, long argc,
   try_catch([&retval]() {
     S_is_creating_key_bind = false;
     S_key_codes_pass.reset();
+  });
+
+  return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long postZoomAction(TaggedData *argv, long argc,
+                                         TaggedData *retval) {
+  retval->type = kTypeBool;
+  retval->data.intval = false;
+
+  // Return an error if we do not get what we expect
+  if (argc < 2 || argv[0].type != kTypeInteger || argv[1].type != kTypeDouble) {
+    return kESErrBadArgumentList;
+  }
+
+  try_catch([&retval, &argv]() {
+    KeyBindAction kbind;
+    kbind.action = KB_ACTION(argv[0].data.intval);
+    kbind.amount = argv[1].data.fltval;
+
+    std::lock_guard lock(S_zoom_action_mutex);
+    S_zoom_actions.push_back(kbind);
+    S_call_idle_routines();
+
+    retval->data.intval = true;
   });
 
   return kESErrOK;

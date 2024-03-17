@@ -210,12 +210,12 @@ void ViewPano::setZoom(double zoom_value) {
                              true);
 }
 
-void ViewPano::incrementZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
+void ViewPano::setZoomFixed(double zoom_value, ZOOM_AROUND zoom_around) {
   double current_zoom = getZoom();
-  double new_zoom = current_zoom + zoom_delta;
+  // double zoom_value = current_zoom + zoom_delta;
 
-  if (new_zoom < 0.008) {
-    new_zoom = 0.008;
+  if (zoom_value < 0.008) {
+    zoom_value = 0.008;
   }
 
   auto actual_view_pos = getViewPanoPosition();
@@ -265,11 +265,11 @@ void ViewPano::incrementZoomFixed(double zoom_delta, ZOOM_AROUND zoom_around) {
   }
 
   DoublePt new_view_pos = {
-      -(dist_to_zoom_pt.y * (new_zoom / current_zoom) + zoom_pt.y),
-      -(dist_to_zoom_pt.x * (new_zoom / current_zoom) + zoom_pt.x),
+      -(dist_to_zoom_pt.y * (zoom_value / current_zoom) + zoom_pt.y),
+      -(dist_to_zoom_pt.x * (zoom_value / current_zoom) + zoom_pt.x),
   };
 
-  setZoom(new_zoom);
+  setZoom(zoom_value);
 
   setViewPanoPosition({static_cast<int32_t>(lround(new_view_pos.y)),
                        static_cast<int32_t>(lround(new_view_pos.x))});
