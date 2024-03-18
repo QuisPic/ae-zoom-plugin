@@ -320,7 +320,6 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
         std::bit_cast<std::promise<ZOOM_STATUS> *>(user_data);
     zoom_status_promise->set_value(ZOOM_STATUS::INITIALIZED);
   } else if (S_is_creating_key_bind) {
-#ifdef AE_OS_WIN
     // stop event propagation for Escape because it must close the Key
     // Capture window and it may accidentally stop extendscript execution
     // if passed to AE
@@ -329,7 +328,6 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
         event->data.keyboard.keycode == VC_ESCAPE) {
       event->reserved = 0x1;
     }
-#endif
 
     if (event->type == EVENT_KEY_PRESSED ||
         event->type == EVENT_MOUSE_PRESSED ||
@@ -724,6 +722,8 @@ static void FillZoomStatusForScript(TaggedData *retval) {
     }
   }
 }
+
+extern "C" DllExport bool quis_zoom_plugin = true;
 
 /* This function is called from the script panel */
 extern "C" DllExport long status(TaggedData *argv, long argc,
