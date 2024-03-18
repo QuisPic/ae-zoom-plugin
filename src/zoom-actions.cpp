@@ -8,7 +8,7 @@ void ZoomActions::post(const KeyBindAction &act) {
   std::lock_guard lock(mutex);
 
   if (!v.empty() && v.back().action == act.action) {
-    if (act.action == KB_ACTION::CHANGE) {
+    if (act.action == KB_ACTION::CHANGE || act.action == KB_ACTION::DECREMENT) {
       v.back().amount += act.amount;
     } else if (act.action == KB_ACTION::SET_TO) {
       v.back().amount = act.amount;

@@ -10,7 +10,6 @@ public:
   static const std::string GetCItem(const A_long major_version);
   static const std::string GetMRUItemDir(const A_long major_version);
   static const std::string GetMRUItemPano(const A_long major_version);
-  static const std::string GetCurrentItem(const A_long major_version);
   static const std::string CoordXf(const A_long major_version);
   static const std::string GetLocalMouse(const A_long major_version);
   static const std::string PointFrameToFloatSource(const A_long major_version);

@@ -636,6 +636,9 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     ERR(ReadKeyBindings());
     ERR(ReadExperimentalOptions());
     ERR(ReadHighDpiOptions());
+    
+    ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id,
+                                                std::to_string(major_versionL).c_str()));
 
     gAeEgg = AeEgg(major_versionL);
 
