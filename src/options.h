@@ -7,7 +7,7 @@ constexpr uint16_t MOUSE_WHEEL_UP = 1;
 constexpr uint16_t MOUSE_WHEEL_DOWN = 2;
 
 enum class ZOOM_AROUND { PANEL_CENTER, CURSOR_POSTION };
-enum class KB_ACTION { CHANGE, SET_TO };
+enum class KB_ACTION { CHANGE, DECREMENT, SET_TO };
 
 struct ViewPositionExperimentalOption {
   bool enabled;

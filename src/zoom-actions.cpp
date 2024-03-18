@@ -41,6 +41,8 @@ A_Err ZoomActions::runActions() {
         ZOOM_AROUND zoom_around = ZOOM_AROUND::PANEL_CENTER;
 
         switch (act.action) {
+        case KB_ACTION::DECREMENT: // support deprecated action
+          zoomValue = -zoomValue;
         case KB_ACTION::CHANGE: {
           if (gExperimentalOptions.fixViewportPosition.zoomAround ==
                   ZOOM_AROUND::CURSOR_POSTION &&
@@ -65,6 +67,8 @@ A_Err ZoomActions::runActions() {
       std::string script_str;
 
       switch (act.action) {
+      case KB_ACTION::DECREMENT: // support deprecated action
+        zoomValue = -zoomValue;
       case KB_ACTION::CHANGE:
         script_str = zoom_increment_js + "(" + std::to_string(zoomValue) + ")";
         break;
