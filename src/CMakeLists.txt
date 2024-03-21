@@ -18,7 +18,12 @@ add_library(
   "zoom-actions.cpp"
   "view-pano.cpp"
   "external-symbols.cpp"
-  "JS/JS.cpp")
+  "JS/JS.cpp"
+  )
+
+if (APPLE)
+  target_sources(${PROJECT_NAME} PUBLIC "osx.h" "osx.mm")
+endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE ../include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -32,9 +37,8 @@ if(WIN32)
       CACHE STRING "After Effects Plugin folder")
 
   if(CMAKE_HOST_WIN32)
-    set(CMD_GENERATE_RRC
-        ${AFX_REZ} ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr
-        ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rrc)
+    set(CMD_GENERATE_RRC ${AFX_REZ} ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr
+                         ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rrc)
   elseif(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE) # This currently works only
                                                    # on Windows Subsystem for
                                                    # Linux (WSL)
@@ -64,8 +68,7 @@ if(WIN32)
     separate_arguments(
       CMD_GENERATE_RR WINDOWS_COMMAND
       "${CMAKE_CXX_COMPILER} /I \"${AESDK_ROOT}/Headers\" /EP "
-      "\"${PROJECT_SOURCE_DIR}/Zoom.r\" > ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr"
-    )
+      "\"${PROJECT_SOURCE_DIR}/Zoom.r\" > ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr")
 
     separate_arguments(
       CMD_GENERATE_RC WINDOWS_COMMAND
@@ -75,11 +78,9 @@ if(WIN32)
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL
                                                  "Clang")
     separate_arguments(
-      CMD_GENERATE_RR
-      UNIX_COMMAND
+      CMD_GENERATE_RR UNIX_COMMAND
       "${CMAKE_CXX_COMPILER} -I \"${AESDK_ROOT}/Headers\" -E -P -x c \
-      ${PROJECT_SOURCE_DIR}/Zoom.r -o ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr"
-    )
+      ${PROJECT_SOURCE_DIR}/Zoom.r -o ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr")
 
     separate_arguments(
       CMD_GENERATE_RC
@@ -102,8 +103,7 @@ if(WIN32)
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rc
     COMMAND ${CMD_GENERATE_RC})
 
-  target_sources(${PROJECT_NAME}
-                 PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rc)
+  target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rc)
 elseif(APPLE)
   set(PLUGIN_FOLDER
       "/Applications/Adobe After Effects 2023/Plug-ins"
@@ -120,8 +120,8 @@ elseif(APPLE)
       OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rsrc
       COMMAND
         ${AFX_REZ} ARGS ${PROJECT_SOURCE_DIR}/Zoom.r -o
-        ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rsrc -useDF
-        ${PIPL_INCLUDES} -D __MACH__)
+        ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rsrc -useDF ${PIPL_INCLUDES} -D
+        __MACH__)
 
     set(RSRC_MAC_FILE ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rsrc)
   else() # on other host platforms we have to take the resource file that was
@@ -149,9 +149,8 @@ elseif(APPLE)
   set_target_properties(${PROJECT_NAME} PROPERTIES BUNDLE_EXTENSION "plugin")
 
   # PkgInfo
-  add_custom_command(
-    OUTPUT ${CMAKE_BINARY_DIR}/PkgInfo
-    COMMAND echo "AEgxFXTC" > ${CMAKE_BINARY_DIR}/PkgInfo)
+  add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/PkgInfo
+                     COMMAND echo "AEgxFXTC" > ${CMAKE_BINARY_DIR}/PkgInfo)
   set_source_files_properties(${CMAKE_BINARY_DIR}/PkgInfo
                               PROPERTIES MACOSX_PACKAGE_LOCATION "")
   target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/PkgInfo)

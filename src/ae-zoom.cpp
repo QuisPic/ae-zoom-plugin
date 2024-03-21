@@ -19,6 +19,7 @@
 #include <vector>
 
 #ifdef AE_OS_MAC
+#include "osx.h"
 #include <objc/objc-runtime.h>
 #endif
 
@@ -218,51 +219,25 @@ static bool IsSameProcessId(
 #ifdef AE_OS_WIN
     HWND hwnd
 #elif defined AE_OS_MAC
-    CFDictionaryRef winDict
+    int windowPIDValue
 #endif
 ) {
 #ifdef AE_OS_WIN
-  static DWORD S_pid = GetCurrentProcessId();
+  static DWORD aePID = GetCurrentProcessId();
   DWORD windowPIDValue;
 
   GetWindowThreadProcessId(hwnd, &windowPIDValue);
 #elif defined AE_OS_MAC
-  static int S_pid = getpid();
-  int windowPIDValue;
-
-  CFNumberRef windowPID =
-      (CFNumberRef)CFDictionaryGetValue(winDict, kCGWindowOwnerPID);
-  CFNumberGetValue(windowPID, kCFNumberIntType, &windowPIDValue);
+  static int aePID = getpid();
 #endif
-  return windowPIDValue == S_pid;
+  return windowPIDValue == aePID;
 }
 
 bool isMainWindowActive() {
 #ifdef AE_OS_WIN
   return IsSameProcessId(GetForegroundWindow());
 #elif defined AE_OS_MAC
-  CFArrayRef windowArray = CGWindowListCopyWindowInfo(
-      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
-      kCGNullWindowID);
-
-  for (CFIndex i = 0, n = CFArrayGetCount(windowArray); i < n; i++) {
-    CFDictionaryRef windict =
-        (CFDictionaryRef)CFArrayGetValueAtIndex(windowArray, i);
-    CFNumberRef layernum =
-        (CFNumberRef)CFDictionaryGetValue(windict, kCGWindowLayer);
-
-    if (layernum) {
-      int layer;
-      CFNumberGetValue(layernum, kCFNumberIntType, &layer);
-
-      if (layer == 0) {
-        return IsSameProcessId(windict);
-      }
-    }
-  }
-
-  CFRelease(windowArray);
-  return false;
+  return IsSameProcessId(osx::getFrontmostAppPID());
 #endif
 }
 
@@ -270,31 +245,10 @@ bool IsCursorOnMainWindow() {
   bool isOverWindow = false;
 
 #ifdef AE_OS_MAC
-  // Get the cursor position
-  CGEventRef event = CGEventCreate(NULL);
-  CGPoint cursorPosition = CGEventGetLocation(event);
-  CFRelease(event);
-
-  CFArrayRef winList = CGWindowListCopyWindowInfo(
-      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
-      kCGNullWindowID);
-
-  for (CFIndex i = 0, n = CFArrayGetCount(winList); i < n; i++) {
-    CFDictionaryRef winDict =
-        (CFDictionaryRef)CFArrayGetValueAtIndex(winList, i);
-    CFDictionaryRef bounds =
-        (CFDictionaryRef)CFDictionaryGetValue(winDict, kCGWindowBounds);
-    CGRect windowFrame;
-    CGRectMakeWithDictionaryRepresentation(bounds, &windowFrame);
-
-    // Check if the cursor is over the window's frame
-    if (CGRectContainsPoint(windowFrame, cursorPosition)) {
-      isOverWindow = IsSameProcessId(winDict);
-      break;
-    }
+  auto pidUnderCursorOpt = osx::windowUnderCursorPID();
+  if (pidUnderCursorOpt) {
+    isOverWindow = IsSameProcessId(pidUnderCursorOpt.value());
   }
-
-  CFRelease(winList);
 #elif defined AE_OS_WIN
   POINT cursor_pos;
   GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
@@ -636,9 +590,9 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     ERR(ReadKeyBindings());
     ERR(ReadExperimentalOptions());
     ERR(ReadHighDpiOptions());
-    
-    ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id,
-                                                std::to_string(major_versionL).c_str()));
+
+    // ERR(suites.UtilitySuite3()->AEGP_ReportInfo(
+    //     S_zoom_id, std::to_string(major_versionL).c_str()));
 
     gAeEgg = AeEgg(major_versionL);
 
