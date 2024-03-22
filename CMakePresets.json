@@ -42,7 +42,7 @@
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": { 
         "CMAKE_BUILD_TYPE": "Debug" ,
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-macos-x86_64.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-macos.cmake"
       },
       "condition": {
         "type": "equals",
