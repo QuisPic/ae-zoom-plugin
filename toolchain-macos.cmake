@@ -4,15 +4,15 @@ set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "" FORCE)
 set(TOOLCHAIN_PREFIX o64)
 # set(TOOLCHAIN_PREFIX x86_64-apple-darwin23)
 
-# Clang target triple
-# set(TARGET x86_64-apple-darwin)
-
 # cross compilers to use for C, C++
 set(CMAKE_AR /usr/local/osxcross/bin/arm64-apple-darwin23-ar)
 set(CMAKE_RANLIB /usr/local/osxcross/bin/arm64-apple-darwin23-ranlib)
 set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-clang)
 set(CMAKE_CXX_COMPILER ${TOOLCHAIN_PREFIX}-clang++)
 add_link_options("-fuse-ld=lld")
+
+# Clang target triple
+set(TARGET x86_64-apple-darwin)
 
 # specify the cross compiler target
 set(CMAKE_C_COMPILER_TARGET ${TARGET})
