@@ -17,16 +17,12 @@
       "vendor": { "microsoft.com/VisualStudioRemoteSettings/CMake/1.0": { "sourceDir": "$env{HOME}/.vs/$ms{projectDirName}" } }
     },
     {
-      "name": "linux-to-windows-debug",
-      "displayName": "Linux Target Windows Debug",
-      "description": "Target Windows from Linux.",
+      "name": "linux-crosscompile-base",
+      "description": "Cross compile from Linux (WSL)",
+      "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
-      "cacheVariables": { 
-        "CMAKE_BUILD_TYPE": "Debug" ,
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/mingw-w64-x86_64.cmake"
-      },
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -34,20 +30,43 @@
       }
     },
     {
-      "name": "linux-to-macos-debug",
+      "name": "linux-crosscompile-to-windows-debug",
+      "displayName": "Linux Target Windows Debug",
+      "description": "Target Windows from Linux.",
+      "inherits": "linux-crosscompile-base",
+      "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Debug" ,
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/mingw-w64-x86_64.cmake"
+      }
+    },
+    {
+      "name": "linux-crosscompile-to-windows-release",
+      "displayName": "Linux Target Windows Release",
+      "description": "Target Windows from Linux.",
+      "inherits": "linux-crosscompile-base",
+      "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Release" ,
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/mingw-w64-x86_64.cmake"
+      }
+    },
+    {
+      "name": "linux-crosscompile-to-macos-debug",
       "displayName": "Linux Target MacOS Debug",
       "description": "Target MacOS from Linux.",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/out/build/${presetName}",
-      "installDir": "${sourceDir}/out/install/${presetName}",
+      "inherits": "linux-crosscompile-base",
       "cacheVariables": { 
         "CMAKE_BUILD_TYPE": "Debug" ,
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-macos.cmake"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "linux-crosscompile-to-macos-release",
+      "displayName": "Linux Target MacOS Release",
+      "description": "Target MacOS from Linux.",
+      "inherits": "linux-crosscompile-base",
+      "cacheVariables": { 
+        "CMAKE_BUILD_TYPE": "Release" ,
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/toolchain-macos.cmake"
       }
     },
     {

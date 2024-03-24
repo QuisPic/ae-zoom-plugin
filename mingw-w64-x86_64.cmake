@@ -10,8 +10,7 @@ set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
 # for debugging in lldb
 set(CMAKE_C_FLAGS_DEBUG "-gdwarf-4")
 set(CMAKE_CXX_FLAGS_DEBUG "-gdwarf-4")
-# set(CMAKE_CXX_FLAGS_DEBUG "-gcodeview")
-# add_compile_options("-gdwarf-2")
+# set(CMAKE_CXX_FLAGS_DEBUG "-gcodeview") add_compile_options("-gdwarf-2")
 
 # cross compilers to use for C, C++ and Fortran
 set(CMAKE_C_COMPILER ${TOOLCHAIN_PREFIX}-gcc)

@@ -18,10 +18,9 @@ add_library(
   "zoom-actions.cpp"
   "view-pano.cpp"
   "external-symbols.cpp"
-  "JS/JS.cpp"
-  )
+  "JS/JS.cpp")
 
-if (APPLE)
+if(APPLE)
   target_sources(${PROJECT_NAME} PUBLIC "osx.h" "osx.mm")
 endif()
 
@@ -158,7 +157,7 @@ elseif(APPLE)
   install(DIRECTORY "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.plugin"
           DESTINATION "${PLUGIN_FOLDER}/")
 
-  if(NOT CMAKE_HOST_APPLE)
+  if(NOT CMAKE_HOST_APPLE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     # create debug symbols
     add_custom_command(
       TARGET ${PROJECT_NAME}
