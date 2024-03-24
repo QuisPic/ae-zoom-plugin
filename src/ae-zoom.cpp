@@ -53,7 +53,7 @@ static std::mutex S_log_mutex;
  *
  * \param s - The referenced string
  */
-static char *getNewBuffer(std::string &s) {
+static char *getNewBuffer(const std::string &s) {
   // Dynamically allocate memory buffer to hold the string
   // to pass back to JavaScript
   char *buff = new char[1 + s.length()];
@@ -808,6 +808,17 @@ extern "C" DllExport long postZoomAction(TaggedData *argv, long argc,
     S_call_idle_routines();
 
     retval->data.intval = true;
+  });
+
+  return kESErrOK;
+}
+
+/* This function is called from the script panel */
+extern "C" DllExport long getVersion(TaggedData *argv, long argc,
+                                     TaggedData *retval) {
+  try_catch([&retval]() {
+    retval->type = kTypeString;
+    retval->data.string = getNewBuffer(VERSION);
   });
 
   return kESErrOK;
