@@ -35,14 +35,13 @@ static std::optional<ZOOM_STATUS> S_zoom_status;
 static std::shared_future<int> S_iohook_future;
 static std::optional<KeyCodes> S_key_codes_pass;
 
-static AEGP_Command hack_cmd;
+// static AEGP_Command hack_cmd;
 
 #ifdef AE_OS_WIN
 static HWND S_main_win_h = nullptr;
 #endif
 
 static std::vector<LogMessage> log_messages;
-// static std::vector<KeyBindAction> S_zoom_actions;
 static ZoomActions S_zoom_actions;
 
 static std::mutex S_create_key_bind_mutex;
@@ -451,9 +450,17 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
                       A_long *max_sleepPL) {
   A_Err err = A_Err_NONE;
 
+  static bool isExtendscriptFlagSet = false;
+  static AEGP_SuiteHandler suites(sP);
+
+  /** Tell script that the plug-in is loaded into Ae */
+  if (!isExtendscriptFlagSet) {
+    RunExtendscript("$.global.__quis_zoom_plugin_is_loaded = true;");
+    isExtendscriptFlagSet = true;
+  }
+
   /* Displaying errors and warnings */
   if (log_messages.size() > 0) {
-    AEGP_SuiteHandler suites(sP);
     std::lock_guard lock(S_log_mutex);
 
     if (S_logging_enabled) {
@@ -474,7 +481,6 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
   /* Passing key presses to the script panel */
   if (S_is_creating_key_bind && S_key_codes_pass) {
-    AEGP_SuiteHandler suites(sP);
     KeyCodes keyCodes = S_key_codes_pass.value();
 
     const std::lock_guard lock(S_create_key_bind_mutex);
@@ -496,40 +502,40 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
   return err;
 }
 
-static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
-                         AEGP_CommandRefcon refconPV,       /* >> */
-                         AEGP_Command command,              /* >> */
-                         AEGP_HookPriority hook_priority,   /* >> */
-                         A_Boolean already_handledB,        /* >> */
-                         A_Boolean *handledPB)              /* << */
-{
-  A_Err err = A_Err_NONE;
-
-  if (already_handledB) {
-    return err;
-  }
-
-  if (command == hack_cmd) {
-    AEGP_SuiteHandler suites(sP);
-
-    // suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
-    *handledPB = true;
-  }
-
-  return err;
-}
-
-static A_Err UpdateMenuHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
-                            AEGP_UpdateMenuRefcon refconPV,    /* >> */
-                            AEGP_WindowType active_window)     /* >> */
-{
-  A_Err err = A_Err_NONE;
-  AEGP_SuiteHandler suites(sP);
-
-  ERR(suites.CommandSuite1()->AEGP_EnableCommand(hack_cmd));
-
-  return err;
-}
+// static A_Err CommandHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
+//                          AEGP_CommandRefcon refconPV,       /* >> */
+//                          AEGP_Command command,              /* >> */
+//                          AEGP_HookPriority hook_priority,   /* >> */
+//                          A_Boolean already_handledB,        /* >> */
+//                          A_Boolean *handledPB)              /* << */
+// {
+//   A_Err err = A_Err_NONE;
+//
+//   if (already_handledB) {
+//     return err;
+//   }
+//
+//   if (command == hack_cmd) {
+//     AEGP_SuiteHandler suites(sP);
+//
+//     // suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
+//     *handledPB = true;
+//   }
+//
+//   return err;
+// }
+//
+// static A_Err UpdateMenuHook(AEGP_GlobalRefcon plugin_refconPV, /* >> */
+//                             AEGP_UpdateMenuRefcon refconPV,    /* >> */
+//                             AEGP_WindowType active_window)     /* >> */
+// {
+//   A_Err err = A_Err_NONE;
+//   AEGP_SuiteHandler suites(sP);
+//
+//   ERR(suites.CommandSuite1()->AEGP_EnableCommand(hack_cmd));
+//
+//   return err;
+// }
 
 static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP,
                        AEGP_DeathRefcon refconP) {
@@ -567,7 +573,7 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     S_call_idle_routines =
         suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
 
-    ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&hack_cmd));
+    // ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&hack_cmd));
     // ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(
     //     hack_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION,
     //     AEGP_MENU_INSERT_AT_BOTTOM));
@@ -591,14 +597,12 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     ERR(ReadExperimentalOptions());
     ERR(ReadHighDpiOptions());
 
-    // ERR(suites.UtilitySuite3()->AEGP_ReportInfo(
-    //     S_zoom_id, std::to_string(major_versionL).c_str()));
+    // ERR(suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, buf));
 
     gAeEgg = AeEgg(major_versionL);
 
     // Start hook thread
     StartIOHook();
-
   } catch (A_Err &thrown_err) {
     err = thrown_err;
   }
