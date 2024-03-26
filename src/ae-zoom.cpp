@@ -570,6 +570,7 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     sP = pica_basicP;
     S_zoom_id = aegp_plugin_id;
     AEGP_SuiteHandler suites(sP);
+
     S_call_idle_routines =
         suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
 
@@ -602,7 +603,9 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     gAeEgg = AeEgg(major_versionL);
 
     // Start hook thread
-    StartIOHook();
+    if (!err) {
+      StartIOHook();
+    }
   } catch (A_Err &thrown_err) {
     err = thrown_err;
   }
@@ -735,6 +738,10 @@ extern "C" DllExport long reload(TaggedData *argv, long argc,
 
       FillZoomStatusForScript(retval);
     }
+
+    ReadKeyBindings();
+    ReadExperimentalOptions();
+    ReadHighDpiOptions();
 
     S_logging_enabled = true;
   });

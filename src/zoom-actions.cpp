@@ -27,13 +27,19 @@ A_Err ZoomActions::runActions() {
   for (const auto &act : v) {
     double zoomValue = act.getAmount(gHighDpiOptions);
 
+    std::optional<ViewPano> view_pano;
+    if (gExperimentalOptions.detectCursorInsideView &&
+        (act.keyCodes.type == EVENT_MOUSE_CLICKED ||
+         act.keyCodes.type == EVENT_MOUSE_WHEEL)) {
+      view_pano = gAeEgg.getViewPanoUnderCursor();
+
+      if (!view_pano) {
+        continue;
+      }
+    }
+
     if (gExperimentalOptions.fixViewportPosition.enabled) {
-      std::optional<ViewPano> view_pano;
-      if (gExperimentalOptions.detectCursorInsideView &&
-          (act.keyCodes.type == EVENT_MOUSE_CLICKED ||
-           act.keyCodes.type == EVENT_MOUSE_WHEEL)) {
-        view_pano = gAeEgg.getViewPanoUnderCursor();
-      } else {
+      if (!view_pano) {
         view_pano = gAeEgg.getActiveViewPano();
       }
 
