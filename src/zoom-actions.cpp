@@ -29,7 +29,7 @@ A_Err ZoomActions::runActions() {
 
     std::optional<ViewPano> view_pano;
     if (gExperimentalOptions.detectCursorInsideView &&
-        (act.keyCodes.type == EVENT_MOUSE_CLICKED ||
+        (act.keyCodes.type == EVENT_MOUSE_PRESSED ||
          act.keyCodes.type == EVENT_MOUSE_WHEEL)) {
       view_pano = gAeEgg.getViewPanoUnderCursor();
 
