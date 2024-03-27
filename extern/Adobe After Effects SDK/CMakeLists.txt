@@ -13,13 +13,13 @@ add_library(
 )
 
 # Surpress warnings
-target_compile_options( AESDK PRIVATE "-w" )
+target_compile_options( AESDK PUBLIC "-w" )
 
 set( AESDK_ROOT ${PROJECT_SOURCE_DIR} CACHE INTERNAL "After Effects SDK Root")
 
 set( AESDK_INCLUDE
 	${PROJECT_SOURCE_DIR}/Headers
-	${PROJECT_SOURCE_DIR}/Headers/SP
+  ${PROJECT_SOURCE_DIR}/Headers/SP
 	${PROJECT_SOURCE_DIR}/Util
 	${PROJECT_SOURCE_DIR}/Resources
 	CACHE INTERNAL "After Effects SDK Header folders"
@@ -27,7 +27,7 @@ set( AESDK_INCLUDE
 
 target_include_directories(
 	AESDK
-	PUBLIC
+  PUBLIC
 	${AESDK_INCLUDE}
 )
 
@@ -50,8 +50,6 @@ elseif( APPLE )
 	find_program( AFX_REZ rez /Developer/Tools )
 endif()
 
-
-if(MSVC)
-	add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-	add_definitions(-D_WINDOWS)
+if( WIN32 )
+  target_compile_definitions(AESDK PUBLIC _CRT_SECURE_NO_WARNINGS _WINDOWS)
 endif()
