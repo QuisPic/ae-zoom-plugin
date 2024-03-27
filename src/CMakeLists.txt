@@ -1,3 +1,5 @@
+add_subdirectory(uiohook)
+
 add_library(
   ${PROJECT_NAME} MODULE
   # headers
