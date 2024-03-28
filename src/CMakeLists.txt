@@ -1,5 +1,3 @@
-add_subdirectory(uiohook)
-
 add_library(
   ${PROJECT_NAME} MODULE
   # headers
@@ -21,6 +19,9 @@ add_library(
   "view-pano.cpp"
   "external-symbols.cpp"
   "JS/JS.cpp")
+
+add_subdirectory(iohook)
+add_subdirectory(uiohook)
 
 if(APPLE)
   target_sources(${PROJECT_NAME} PUBLIC "osx.h" "osx.mm")

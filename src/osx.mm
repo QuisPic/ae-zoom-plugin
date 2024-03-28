@@ -28,4 +28,27 @@ std::optional<int> osx::windowUnderCursorPID() {
 
   return pidUnderCursor != -1 ? std::optional(pidUnderCursor) : std::nullopt;
 }
+
+void osx::addEventMonitor() {
+  // Define the event mask to listen for key down events
+  NSEventMask eventMask = NSEventMaskKeyDown | NSEventMaskLeftMouseDown |
+                          NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown;
+
+  // Implement the event handler block
+  NSEvent * (^eventHandler)(NSEvent *) = ^NSEvent *(NSEvent *theEvent) {
+    if ([theEvent type] == NSEventTypeKeyDown) {
+      NSLog(@"Key is pressed with keycode %d", theEvent.keyCode);
+    } else if ([theEvent type] == NSEventTypeLeftMouseDown ||
+               [theEvent type] == NSEventTypeRightMouseDown ||
+               [theEvent type] == NSEventTypeOtherMouseDown) {
+      NSLog(@"Mouse button pressed with button number %d",
+            theEvent.buttonNumber);
+    }
+    // You can return a modified event here or nil to stop dispatching
+    return theEvent;
+  };
+
+  // Add the local monitor for events
+  [NSEvent addLocalMonitorForEventsMatchingMask:eventMask handler:eventHandler];
+}
 #endif

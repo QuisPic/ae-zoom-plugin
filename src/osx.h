@@ -8,5 +8,6 @@
 namespace osx {
 int getFrontmostAppPID();
 std::optional<int> windowUnderCursorPID();
+void addEventMonitor();
 } // namespace osx
 #endif

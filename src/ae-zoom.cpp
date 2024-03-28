@@ -4,6 +4,7 @@
 #include "ExternalObject/SoSharedLibDefs.h"
 #include "JS/JS.h"
 #include "ae-egg.h"
+#include "iohook.h"
 #include "options.h"
 #include "uiohook.h"
 #include "util-functions.h"
@@ -592,6 +593,7 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
 
 #ifdef AE_OS_WIN
     ERR(suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h));
+    win::addEventHookForHwnd(S_main_win_h);
 #endif
 
     ERR(ReadKeyBindings());
@@ -604,8 +606,9 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
 
     // Start hook thread
     if (!err) {
-      StartIOHook();
+      // StartIOHook();
     }
+
   } catch (A_Err &thrown_err) {
     err = thrown_err;
   }
@@ -635,7 +638,8 @@ extern "C" DllExport long ESGetVersion() { return 0x1; }
  * functions. They are used by JavaScript to cast the arguments, and to populate
  * the reflection interface.
  */
-extern "C" DllExport const char *ESInitialize(const TaggedData **argv, long argc) {
+extern "C" DllExport const char *ESInitialize(const TaggedData **argv,
+                                              long argc) {
   // return nullptr;
   return "postZoomAction_df";
 }
