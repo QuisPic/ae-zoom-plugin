@@ -27,7 +27,7 @@ M_Point ViewPano::getMouseRelativeToComp() {
 #ifdef AE_OS_WIN
   M_Point comp_mouse;
   extSymbols->GetLocalMouseFn(pano, &comp_mouse);
-#elifdef AE_OS_MAC
+#elif defined AE_OS_MAC
   auto comp_mouse = extSymbols->GetLocalMouseFn(pano);
 #endif
 

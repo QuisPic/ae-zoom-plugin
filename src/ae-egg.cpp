@@ -55,7 +55,7 @@ std::optional<ViewPano> AeEgg::getViewPanoUnderCursor() {
 #ifdef AE_OS_WIN
     POINT native_cursor_pos;
     GetCursorPos(&native_cursor_pos);
-#elifdef AE_OS_MAC
+#elif defined AE_OS_MAC
     CGEventRef event = CGEventCreate(NULL);
     CGPoint native_cursor_pos = CGEventGetLocation(event);
     CFRelease(event);

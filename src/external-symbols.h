@@ -55,7 +55,7 @@ typedef M_Point (*CoordXf)(CPanoProjItem *, M_Point *, FEE_CoordFxType,
 
 #ifdef AE_OS_WIN
 typedef M_Point (*GetLocalMouse)(CPanoProjItem *, M_Point *);
-#elifdef AE_OS_MAC
+#elif defined AE_OS_MAC
 typedef M_Point (*GetLocalMouse)(CPanoProjItem *);
 #endif
 
@@ -72,7 +72,7 @@ typedef CPane *(*GetPaneAtCursor)(CDesktopPlus *, M_Point);
 
 #ifdef AE_OS_WIN
 typedef void (*GetPosition)(CPanoProjItem *, LongPt *);
-#elifdef AE_OS_MAC
+#elif defined AE_OS_MAC
 typedef LongPt (*GetPosition)(CPanoProjItem *, LongPt *);
 #endif
 
