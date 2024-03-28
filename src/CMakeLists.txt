@@ -68,25 +68,26 @@ if(WIN32)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     separate_arguments(
       CMD_GENERATE_RR WINDOWS_COMMAND
-      "${CMAKE_CXX_COMPILER} /I \"${AESDK_ROOT}/Headers\" /EP "
-      "\"${PROJECT_SOURCE_DIR}/Zoom.r\" > ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr")
+      "\"${CMAKE_CXX_COMPILER}\" /I \"${AESDK_ROOT}/Headers\" /EP \
+      \"${PROJECT_SOURCE_DIR}/Zoom.r\" > ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr")
 
     separate_arguments(
-      CMD_GENERATE_RC WINDOWS_COMMAND
-      "${CMAKE_CXX_COMPILER} /D \"MSWindows\" /EP "
-      "${CMAKE_CURRENT_BINARY_DIR}/Zoom.rrc > ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rc"
+      CMD_GENERATE_RC
+      WINDOWS_COMMAND
+      "\"${CMAKE_CXX_COMPILER}\" /D \"MSWindows\" /EP \
+      ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rrc > ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rc"
     )
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL
                                                  "Clang")
     separate_arguments(
       CMD_GENERATE_RR UNIX_COMMAND
-      "${CMAKE_CXX_COMPILER} -I \"${AESDK_ROOT}/Headers\" -E -P -x c \
+      "\"${CMAKE_CXX_COMPILER}\" -I \"${AESDK_ROOT}/Headers\" -E -P -x c \
       ${PROJECT_SOURCE_DIR}/Zoom.r -o ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rr")
 
     separate_arguments(
       CMD_GENERATE_RC
       UNIX_COMMAND
-      "${CMAKE_CXX_COMPILER} -D \"MSWindows\" -E -P -x c \
+      "\"${CMAKE_CXX_COMPILER}\" -D \"MSWindows\" -E -P -x c \
       ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rrc -o ${CMAKE_CURRENT_BINARY_DIR}/Zoom.rc"
     )
   endif()
