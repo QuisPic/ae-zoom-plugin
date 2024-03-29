@@ -21,7 +21,7 @@ add_library(
   "JS/JS.cpp")
 
 add_subdirectory(iohook)
-add_subdirectory(uiohook)
+# add_subdirectory(uiohook)
 
 if(APPLE)
   target_sources(${PROJECT_NAME} PUBLIC "osx.h" "osx.mm")
@@ -30,7 +30,7 @@ endif()
 target_include_directories(${PROJECT_NAME} PRIVATE ../include)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(${PROJECT_NAME} PRIVATE AESDK uiohook
+target_link_libraries(${PROJECT_NAME} PRIVATE AESDK
                                               nlohmann_json::nlohmann_json)
 
 if(WIN32)

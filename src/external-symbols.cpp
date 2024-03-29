@@ -1,6 +1,6 @@
 #include "external-symbols.h"
+#include "iohook.h"
 #include "mangled-names.h"
-#include "uiohook.h"
 #include "util-functions.h"
 
 #ifdef AE_OS_WIN

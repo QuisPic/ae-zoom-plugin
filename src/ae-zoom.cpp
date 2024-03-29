@@ -6,7 +6,7 @@
 #include "ae-egg.h"
 #include "iohook.h"
 #include "options.h"
-#include "uiohook.h"
+// #include "uiohook.h"
 #include "util-functions.h"
 #include "zoom-actions.h"
 #include <atomic>
@@ -233,39 +233,39 @@ static bool IsSameProcessId(
   return windowPIDValue == aePID;
 }
 
-bool isMainWindowActive() {
-#ifdef AE_OS_WIN
-  return IsSameProcessId(GetForegroundWindow());
-#elif defined AE_OS_MAC
-  return IsSameProcessId(osx::getFrontmostAppPID());
-#endif
-}
+// bool isMainWindowActive() {
+// #ifdef AE_OS_WIN
+//   return IsSameProcessId(GetForegroundWindow());
+// #elif defined AE_OS_MAC
+//   return IsSameProcessId(osx::getFrontmostAppPID());
+// #endif
+// }
+//
+// bool IsCursorOnMainWindow() {
+//   bool isOverWindow = false;
+//
+// #ifdef AE_OS_MAC
+//   auto pidUnderCursorOpt = osx::windowUnderCursorPID();
+//   if (pidUnderCursorOpt) {
+//     isOverWindow = IsSameProcessId(pidUnderCursorOpt.value());
+//   }
+// #elif defined AE_OS_WIN
+//   POINT cursor_pos;
+//   GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
+//
+//   isOverWindow = IsSameProcessId(WindowFromPoint(cursor_pos));
+// #endif
+//
+//   return isOverWindow;
+// }
 
-bool IsCursorOnMainWindow() {
-  bool isOverWindow = false;
+void dispatch_proc(iohook_event *const event, void *user_data) {
+  // static uint16_t last_key_code = VC_UNDEFINED;
 
-#ifdef AE_OS_MAC
-  auto pidUnderCursorOpt = osx::windowUnderCursorPID();
-  if (pidUnderCursorOpt) {
-    isOverWindow = IsSameProcessId(pidUnderCursorOpt.value());
-  }
-#elif defined AE_OS_WIN
-  POINT cursor_pos;
-  GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
-
-  isOverWindow = IsSameProcessId(WindowFromPoint(cursor_pos));
-#endif
-
-  return isOverWindow;
-}
-
-void dispatch_proc(uiohook_event *const event, void *user_data) {
-  static uint16_t last_key_code = VC_UNDEFINED;
-
-  if (event->type == EVENT_KEY_RELEASED &&
-      event->data.keyboard.keycode == last_key_code) {
-    last_key_code = VC_UNDEFINED;
-  }
+  // if (event->type == EVENT_KEY_RELEASED &&
+  //     event->data.keyboard.keycode == last_key_code) {
+  //   last_key_code = VC_UNDEFINED;
+  // }
 
   if (event->type == EVENT_HOOK_ENABLED &&
       S_zoom_status_future.wait_for(std::chrono::seconds(0)) !=
@@ -277,8 +277,7 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
     // stop event propagation for Escape because it must close the Key
     // Capture window and it may accidentally stop extendscript execution
     // if passed to AE
-    if ((event->type == EVENT_KEY_PRESSED || event->type == EVENT_KEY_TYPED ||
-         event->type == EVENT_KEY_RELEASED) &&
+    if ((event->type == EVENT_KEY_PRESSED) &&
         event->data.keyboard.keycode == VC_ESCAPE) {
       event->reserved = 0x1;
     }
@@ -287,11 +286,14 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
         event->type == EVENT_MOUSE_PRESSED ||
         event->type == EVENT_MOUSE_WHEEL) {
       if (event->type == EVENT_KEY_PRESSED) {
-        if (last_key_code == event->data.keyboard.keycode) {
+        if (event->data.keyboard.repeat) {
           return;
-        } else {
-          last_key_code = event->data.keyboard.keycode;
         }
+        // if (last_key_code == event->data.keyboard.keycode) {
+        //   return;
+        // } else {
+        //   last_key_code = event->data.keyboard.keycode;
+        // }
       }
 
       const std::lock_guard lock(S_create_key_bind_mutex);
@@ -299,10 +301,9 @@ void dispatch_proc(uiohook_event *const event, void *user_data) {
 
       S_call_idle_routines();
     }
-  } else if (((event->type == EVENT_KEY_PRESSED && isMainWindowActive()) ||
+  } else if (((event->type == EVENT_KEY_PRESSED) ||
               ((event->type == EVENT_MOUSE_PRESSED ||
-                event->type == EVENT_MOUSE_WHEEL) &&
-               IsCursorOnMainWindow()))) {
+                event->type == EVENT_MOUSE_WHEEL)))) {
     KeyCodes current_key_codes(event);
     bool key_bind_found = false;
 
@@ -421,11 +422,11 @@ std::tuple<std::string, std::string> GetHookErrorStrings(int status) {
 
 int HookProc(std::promise<ZOOM_STATUS> zoom_status_promise) {
   // Set the event callback for uiohook events.
-  hook_set_dispatch_proc(&dispatch_proc, &zoom_status_promise);
+  iohook_set_dispatch_proc(&dispatch_proc, &zoom_status_promise);
 
   // Start the hook and block.
   // NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
-  int status = hook_run();
+  int status = iohook_run();
 
   if (status != UIOHOOK_SUCCESS) {
     if (S_zoom_status_future.wait_for(std::chrono::seconds(0)) !=
@@ -443,8 +444,10 @@ static void StartIOHook() {
   S_zoom_status.reset();
   std::promise<ZOOM_STATUS> zoom_status_promise;
   S_zoom_status_future = zoom_status_promise.get_future();
-  S_iohook_future =
-      std::async(std::launch::async, HookProc, std::move(zoom_status_promise));
+  HookProc(std::move(zoom_status_promise));
+  // S_iohook_future =
+  //     std::async(std::launch::async, HookProc,
+  //     std::move(zoom_status_promise));
 }
 
 static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
@@ -543,7 +546,7 @@ static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP,
   // if the iohook thread is not finished
   if (S_iohook_future.valid() && S_iohook_future.wait_for(std::chrono::seconds(
                                      0)) == std::future_status::timeout) {
-    int status = hook_stop();
+    int status = iohook_stop();
 
     if (status != UIOHOOK_SUCCESS) {
       logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
@@ -606,7 +609,7 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
 
     // Start hook thread
     if (!err) {
-      // StartIOHook();
+      StartIOHook();
     }
 
   } catch (A_Err &thrown_err) {

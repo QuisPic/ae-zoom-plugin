@@ -2,10 +2,10 @@
 
 #include "A.h"
 #include "external-symbols.h"
+// #include "iohook.h"
 #include "view-pano.h"
 #include <cstdint>
 #include <optional>
-#include <uiohook.h>
 
 class AeEgg {
 private:

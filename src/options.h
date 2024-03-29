@@ -1,6 +1,6 @@
 #pragma once
+#include "iohook.h"
 #include <nlohmann/json.hpp>
-#include <uiohook.h>
 #include <vector>
 
 constexpr uint16_t MOUSE_WHEEL_UP = 1;
@@ -52,26 +52,27 @@ public:
            const uint16_t &keycode)
       : type(type), mask(mask), keycode(keycode) {}
 
-  KeyCodes(uiohook_event *e) {
+  KeyCodes(iohook_event *e) {
     type = e->type;
-    mask = 0x0;
+    // mask = 0x0;
+    mask = e->mask;
 
     // make the mask accept both left and right buttons
-    if (e->mask & (MASK_CTRL)) {
-      mask |= MASK_CTRL;
-    }
-
-    if (e->mask & (MASK_META)) {
-      mask |= MASK_META;
-    }
-
-    if (e->mask & (MASK_SHIFT)) {
-      mask |= MASK_SHIFT;
-    }
-
-    if (e->mask & (MASK_ALT)) {
-      mask |= MASK_ALT;
-    }
+    // if (e->mask & (MASK_CTRL)) {
+    //   mask |= MASK_CTRL;
+    // }
+    //
+    // if (e->mask & (MASK_META)) {
+    //   mask |= MASK_META;
+    // }
+    //
+    // if (e->mask & (MASK_SHIFT)) {
+    //   mask |= MASK_SHIFT;
+    // }
+    //
+    // if (e->mask & (MASK_ALT)) {
+    //   mask |= MASK_ALT;
+    // }
 
     switch (e->type) {
     case EVENT_KEY_PRESSED:
