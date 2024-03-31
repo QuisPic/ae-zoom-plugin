@@ -292,9 +292,6 @@ uint16_t get_modifiers(NSEventModifierFlags flags) {
   if (flags & NSEventModifierFlagOption) {
     modifiers |= MASK_ALT;
   }
-  if (flags & NSEventModifierFlagCapsLock) {
-    modifiers |= MASK_CAPS_LOCK;
-  }
 
   return modifiers;
 }

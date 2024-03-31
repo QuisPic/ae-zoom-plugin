@@ -1,7 +1,12 @@
 #pragma once
 
+#include "AEConfig.h"
 #include <cstdarg>
 #include <cstdint>
+
+#ifdef AE_OS_WIN
+#include <windows.h>
+#endif
 
 /* Begin Error Codes */
 #define UIOHOOK_SUCCESS 0x00
@@ -434,7 +439,11 @@ void iohook_set_logger_proc(logger_t logger_proc, void *user_data);
 void iohook_set_dispatch_proc(dispatcher_t dispatch_proc, void *user_data);
 
 // Insert the event hook.
+#ifdef AE_OS_WIN
+int iohook_run(HWND);
+#elif defined AE_OS_MAC
 int iohook_run();
+#endif
 
 // Withdraw the event hook.
 int iohook_stop();

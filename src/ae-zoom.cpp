@@ -6,11 +6,9 @@
 #include "ae-egg.h"
 #include "iohook.h"
 #include "options.h"
-// #include "uiohook.h"
 #include "util-functions.h"
 #include "zoom-actions.h"
 #include <atomic>
-#include <cstdint>
 #include <exception>
 #include <future>
 #include <mutex>
@@ -46,7 +44,6 @@ static std::vector<LogMessage> log_messages;
 static ZoomActions S_zoom_actions;
 
 static std::mutex S_create_key_bind_mutex;
-// static std::mutex S_zoom_action_mutex;
 static std::mutex S_log_mutex;
 
 /**
@@ -285,10 +282,8 @@ void dispatch_proc(iohook_event *const event, void *user_data) {
     if (event->type == EVENT_KEY_PRESSED ||
         event->type == EVENT_MOUSE_PRESSED ||
         event->type == EVENT_MOUSE_WHEEL) {
-      if (event->type == EVENT_KEY_PRESSED) {
-        if (event->data.keyboard.repeat) {
-          return;
-        }
+      if (event->type == EVENT_KEY_PRESSED && event->data.keyboard.repeat) {
+        return;
         // if (last_key_code == event->data.keyboard.keycode) {
         //   return;
         // } else {
@@ -424,9 +419,12 @@ int HookProc(std::promise<ZOOM_STATUS> zoom_status_promise) {
   // Set the event callback for uiohook events.
   iohook_set_dispatch_proc(&dispatch_proc, &zoom_status_promise);
 
-  // Start the hook and block.
-  // NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
+// NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
+#ifdef AE_OS_WIN
+  int status = iohook_run(S_main_win_h);
+#elif defined AE_OS_MAC
   int status = iohook_run();
+#endif
 
   if (status != UIOHOOK_SUCCESS) {
     if (S_zoom_status_future.wait_for(std::chrono::seconds(0)) !=
@@ -596,7 +594,6 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
 
 #ifdef AE_OS_WIN
     ERR(suites.UtilitySuite6()->AEGP_GetMainHWND(&S_main_win_h));
-    win::addEventHookForHwnd(S_main_win_h);
 #endif
 
     ERR(ReadKeyBindings());
