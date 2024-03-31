@@ -118,6 +118,7 @@ bool dispatch_mouse_wheel(MOUSEHOOKSTRUCTEX *mshook, uint8_t direction) {
   io_event.data.wheel.rotation =
       (int16_t)GET_WHEEL_DELTA_WPARAM(mshook->mouseData);
   io_event.data.wheel.delta = WHEEL_DELTA;
+  io_event.data.wheel.precise = false;
 
   UINT uiAction = SPI_GETWHEELSCROLLLINES;
   if (direction == WHEEL_HORIZONTAL_DIRECTION) {

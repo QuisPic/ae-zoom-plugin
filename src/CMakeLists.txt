@@ -5,7 +5,6 @@ add_library(
   "ae-egg.h"
   "mangled-names.h"
   "options.h"
-  "zoom-actions.h"
   "view-pano.h"
   "external-symbols.h"
   "JS/JS.h"
@@ -15,7 +14,6 @@ add_library(
   "ae-egg.cpp"
   "mangled-names.cpp"
   "options.cpp"
-  "zoom-actions.cpp"
   "view-pano.cpp"
   "external-symbols.cpp"
   "JS/JS.cpp")

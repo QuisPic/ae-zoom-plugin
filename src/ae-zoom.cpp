@@ -7,31 +7,31 @@
 #include "iohook.h"
 #include "options.h"
 #include "util-functions.h"
-#include "zoom-actions.h"
-#include <atomic>
+// #include "zoom-actions.h"
+// #include <atomic>
 #include <exception>
-#include <future>
-#include <mutex>
+// #include <future>
+// #include <mutex>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
 
 #ifdef AE_OS_MAC
-#include "osx.h"
 #include <objc/objc-runtime.h>
 #endif
 
 static AEGP_PluginID S_zoom_id = 0L;
 static SPBasicSuite *sP = NULL;
 
-static A_Err (*S_call_idle_routines)(void) = nullptr;
+// static A_Err (*S_call_idle_routines)(void) = nullptr;
 
-static std::atomic<bool> S_is_creating_key_bind = false;
-static std::atomic<bool> S_logging_enabled = true;
-static std::shared_future<ZOOM_STATUS> S_zoom_status_future;
+static bool S_is_creating_key_bind = false;
+static bool S_logging_enabled = true;
+// static std::shared_future<ZOOM_STATUS> S_zoom_status_future;
 static std::optional<ZOOM_STATUS> S_zoom_status;
-static std::shared_future<int> S_iohook_future;
+static int S_iohook_status = UIOHOOK_FAILURE;
 static std::optional<KeyCodes> S_key_codes_pass;
 
 // static AEGP_Command hack_cmd;
@@ -41,10 +41,10 @@ static HWND S_main_win_h = nullptr;
 #endif
 
 static std::vector<LogMessage> log_messages;
-static ZoomActions S_zoom_actions;
+// static ZoomActions S_zoom_actions;
 
-static std::mutex S_create_key_bind_mutex;
-static std::mutex S_log_mutex;
+// static std::mutex S_create_key_bind_mutex;
+// static std::mutex S_log_mutex;
 
 /**
  * \brief Utility function to handle strings and memory clean up
@@ -73,7 +73,6 @@ void logger(unsigned int level, std::tuple<std::string, std::string> strings) {
 
   case LOG_LEVEL_WARN:
   case LOG_LEVEL_ERROR:
-    std::lock_guard lock(S_log_mutex);
     log_messages.emplace_back(level, std::get<0>(strings),
                               std::get<1>(strings));
     break;
@@ -92,7 +91,6 @@ void logger(unsigned int level, const std::string &format_str,
 
   case LOG_LEVEL_WARN:
   case LOG_LEVEL_ERROR:
-    std::lock_guard lock(S_log_mutex);
     log_messages.emplace_back(level, format_str, instructions_str);
     break;
   }
@@ -212,23 +210,23 @@ static A_Err ReadKeyBindings() {
   return err;
 }
 
-static bool IsSameProcessId(
-#ifdef AE_OS_WIN
-    HWND hwnd
-#elif defined AE_OS_MAC
-    int windowPIDValue
-#endif
-) {
-#ifdef AE_OS_WIN
-  static DWORD aePID = GetCurrentProcessId();
-  DWORD windowPIDValue;
-
-  GetWindowThreadProcessId(hwnd, &windowPIDValue);
-#elif defined AE_OS_MAC
-  static int aePID = getpid();
-#endif
-  return windowPIDValue == aePID;
-}
+// static bool IsSameProcessId(
+// #ifdef AE_OS_WIN
+//     HWND hwnd
+// #elif defined AE_OS_MAC
+//     int windowPIDValue
+// #endif
+// ) {
+// #ifdef AE_OS_WIN
+//   static DWORD aePID = GetCurrentProcessId();
+//   DWORD windowPIDValue;
+//
+//   GetWindowThreadProcessId(hwnd, &windowPIDValue);
+// #elif defined AE_OS_MAC
+//   static int aePID = getpid();
+// #endif
+//   return windowPIDValue == aePID;
+// }
 
 // bool isMainWindowActive() {
 // #ifdef AE_OS_WIN
@@ -256,24 +254,87 @@ static bool IsSameProcessId(
 //   return isOverWindow;
 // }
 
+static void dispatchKeyBindAction(const KeyBindAction &act,
+                                  iohook_event *const event) {
+  double zoomValue = act.getAmount(gHighDpiOptions);
+
+  if (event->type == EVENT_MOUSE_WHEEL && event->data.wheel.precise) {
+    zoomValue *= std::abs(event->data.wheel.rotation);
+  }
+
+  std::optional<ViewPano> view_pano;
+  if (gExperimentalOptions.detectCursorInsideView &&
+      (act.keyCodes.type == EVENT_MOUSE_PRESSED ||
+       act.keyCodes.type == EVENT_MOUSE_WHEEL)) {
+    view_pano = gAeEgg.getViewPanoUnderCursor();
+
+    if (!view_pano) {
+      return;
+    }
+  }
+
+  if (gExperimentalOptions.fixViewportPosition.enabled) {
+    if (!view_pano) {
+      view_pano = gAeEgg.getActiveViewPano();
+    }
+
+    if (view_pano) {
+      ZOOM_AROUND zoom_around = ZOOM_AROUND::PANEL_CENTER;
+
+      switch (act.action) {
+      case KB_ACTION::DECREMENT: // support deprecated action
+        zoomValue = -zoomValue;
+      case KB_ACTION::CHANGE: {
+        if (gExperimentalOptions.fixViewportPosition.zoomAround ==
+                ZOOM_AROUND::CURSOR_POSTION &&
+            act.keyCodes.type == EVENT_MOUSE_WHEEL) {
+          zoom_around = ZOOM_AROUND::CURSOR_POSTION;
+        }
+
+        auto current_zoom = view_pano->getZoom();
+        view_pano->setZoomFixed(current_zoom + zoomValue / 100.0, zoom_around);
+        break;
+      }
+      case KB_ACTION::SET_TO: {
+        view_pano->setZoomFixed(zoomValue / 100.0, zoom_around);
+        break;
+      }
+      default:
+        break;
+      }
+    }
+  } else {
+    std::string script_str;
+
+    switch (act.action) {
+    case KB_ACTION::DECREMENT: // support deprecated action
+      zoomValue = -zoomValue;
+    case KB_ACTION::CHANGE:
+      script_str = zoom_increment_js + "(" + std::to_string(zoomValue) + ")";
+      break;
+    case KB_ACTION::SET_TO:
+      script_str = zoom_set_to_js + "(" + std::to_string(zoomValue) + ")";
+      break;
+    default:
+      break;
+    }
+
+    RunExtendscript(script_str);
+  }
+}
+
 void dispatch_proc(iohook_event *const event, void *user_data) {
-  // static uint16_t last_key_code = VC_UNDEFINED;
-
-  // if (event->type == EVENT_KEY_RELEASED &&
-  //     event->data.keyboard.keycode == last_key_code) {
-  //   last_key_code = VC_UNDEFINED;
-  // }
-
-  if (event->type == EVENT_HOOK_ENABLED &&
-      S_zoom_status_future.wait_for(std::chrono::seconds(0)) !=
-          std::future_status::ready) {
-    auto zoom_status_promise =
-        std::bit_cast<std::promise<ZOOM_STATUS> *>(user_data);
-    zoom_status_promise->set_value(ZOOM_STATUS::INITIALIZED);
+  if (event->type == EVENT_HOOK_ENABLED) {
+    S_zoom_status = ZOOM_STATUS::INITIALIZED;
+  } else if (event->type == EVENT_HOOK_DISABLED) {
+    S_zoom_status = ZOOM_STATUS::FINISHED;
   } else if (S_is_creating_key_bind) {
+
     // stop event propagation for Escape because it must close the Key
     // Capture window and it may accidentally stop extendscript execution
     // if passed to AE
+    //
+    /** TODO capture key released event as well */
     if ((event->type == EVENT_KEY_PRESSED) &&
         event->data.keyboard.keycode == VC_ESCAPE) {
       event->reserved = 0x1;
@@ -282,25 +343,24 @@ void dispatch_proc(iohook_event *const event, void *user_data) {
     if (event->type == EVENT_KEY_PRESSED ||
         event->type == EVENT_MOUSE_PRESSED ||
         event->type == EVENT_MOUSE_WHEEL) {
+      /** no need to pass repeated events when creating key bind */
       if (event->type == EVENT_KEY_PRESSED && event->data.keyboard.repeat) {
         return;
-        // if (last_key_code == event->data.keyboard.keycode) {
-        //   return;
-        // } else {
-        //   last_key_code = event->data.keyboard.keycode;
-        // }
       }
 
-      const std::lock_guard lock(S_create_key_bind_mutex);
-      S_key_codes_pass.emplace(event);
+      KeyCodes keyCodes(event);
+      std::string pass_fn_script = pass_key_bind_js + "(" +
+                                   std::to_string(keyCodes.type) + "," +
+                                   std::to_string(keyCodes.mask) + "," +
+                                   std::to_string(keyCodes.keycode) + ")";
 
-      S_call_idle_routines();
+      /** pass key codes to the script */
+      RunExtendscript(pass_fn_script);
     }
   } else if (((event->type == EVENT_KEY_PRESSED) ||
               ((event->type == EVENT_MOUSE_PRESSED ||
                 event->type == EVENT_MOUSE_WHEEL)))) {
     KeyCodes current_key_codes(event);
-    bool key_bind_found = false;
 
     for (const KeyBindAction &kbind : gKeyBindings) {
       if (!kbind.enabled) {
@@ -308,31 +368,29 @@ void dispatch_proc(iohook_event *const event, void *user_data) {
       }
 
       if (current_key_codes == kbind.keyCodes) {
-        S_zoom_actions.post(kbind);
+        /** dispatch this keybind's action */
+        dispatchKeyBindAction(kbind, event);
 
-        key_bind_found = true;
-      }
-    }
-
-    // stop event propagation on all AE's default key bindings that change
-    // viewport zoom
-    if (key_bind_found &&
-        (event->type == EVENT_MOUSE_WHEEL ||
-         current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_COMMA} ||
-         current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_PERIOD} ||
+        // stop event propagation on all AE's default key bindings that change
+        // viewport zoom
+        if ((event->type == EVENT_MOUSE_WHEEL ||
+             current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_COMMA} ||
+             current_key_codes == KeyCodes{EVENT_KEY_PRESSED, 0, VC_PERIOD} ||
 #ifdef AE_OS_WIN
-         current_key_codes ==
-             KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_MINUS} ||
-         current_key_codes ==
-             KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_EQUALS}))
+             current_key_codes ==
+                 KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_MINUS} ||
+             current_key_codes ==
+                 KeyCodes{EVENT_KEY_PRESSED, MASK_CTRL, VC_EQUALS}))
 #elif defined AE_OS_MAC
-         current_key_codes ==
-             KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_MINUS} ||
-         current_key_codes ==
-             KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_EQUALS}))
+             current_key_codes ==
+                 KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_MINUS} ||
+             current_key_codes ==
+                 KeyCodes{EVENT_KEY_PRESSED, MASK_META, VC_EQUALS}))
 #endif
-    {
-      event->reserved = 0x1; // stop event propagation
+        {
+          event->reserved = 0x1; // stop event propagation
+        }
+      }
     }
   }
 }
@@ -350,59 +408,17 @@ std::tuple<std::string, std::string> GetHookErrorStrings(int status) {
     result = {"Failed to allocate memory.", ""};
     break;
 
-  // X11 specific errors.
-  case UIOHOOK_ERROR_X_OPEN_DISPLAY:
-    result = {"Failed to open X11 display.", ""};
-    break;
-
-  case UIOHOOK_ERROR_X_RECORD_NOT_FOUND:
-    result = {"Unable to locate XRecord extension.", ""};
-    break;
-
-  case UIOHOOK_ERROR_X_RECORD_ALLOC_RANGE:
-    result = {"Unable to allocate XRecord range.", ""};
-    break;
-
-  case UIOHOOK_ERROR_X_RECORD_CREATE_CONTEXT:
-    result = {"Unable to allocate XRecord context.", ""};
-    break;
-
-  case UIOHOOK_ERROR_X_RECORD_ENABLE_CONTEXT:
-    result = {"Failed to enable XRecord context.", ""};
-    break;
-
-  case UIOHOOK_ERROR_X_RECORD_GET_CONTEXT:
-    // NOTE This is the only platform specific error that occurs on hook_stop().
-    result = {"Failed to get XRecord context.", ""};
-    break;
-
   // Windows specific errors.
   case UIOHOOK_ERROR_SET_WINDOWS_HOOK_EX:
-    result = {"Failed to register low level windows hook.", ""};
+    result = {"Failed to register windows hook.", ""};
+    break;
+  case UIOHOOK_ERROR_UNHOOK_WINDOWS_HOOK_EX:
+    result = {"Failed to unhook windows hook.", ""};
     break;
 
   // Darwin specific errors.
-  case UIOHOOK_ERROR_AXAPI_DISABLED:
-    result = {"Failed to enable access for assistive devices.",
-              "Zoom plug-in requires accessibility permissions to detect key "
-              "bindings. Enable the permissions in System Settings -> Privacy "
-              "& Security -> Accessibility -> Adobe After Effects."};
-    break;
-
-  case UIOHOOK_ERROR_CREATE_EVENT_PORT:
-    result = {"Failed to create apple event port.", ""};
-    break;
-
-  case UIOHOOK_ERROR_CREATE_RUN_LOOP_SOURCE:
-    result = {"Failed to create apple run loop source.", ""};
-    break;
-
-  case UIOHOOK_ERROR_GET_RUNLOOP:
-    result = {"Failed to acquire apple run loop.", ""};
-    break;
-
-  case UIOHOOK_ERROR_CREATE_OBSERVER:
-    result = {"Failed to create apple run loop observer.", ""};
+  case UIOHOOK_ERROR_CREATE_EVENT_MONITOR:
+    result = {"Failed to create local events monitor.", ""};
     break;
 
   // Default error.
@@ -415,37 +431,33 @@ std::tuple<std::string, std::string> GetHookErrorStrings(int status) {
   return result;
 }
 
-int HookProc(std::promise<ZOOM_STATUS> zoom_status_promise) {
-  // Set the event callback for uiohook events.
-  iohook_set_dispatch_proc(&dispatch_proc, &zoom_status_promise);
+static int StartIOHook() {
+  S_zoom_status.reset();
 
-// NOTE If EVENT_HOOK_ENABLED was delivered, the status will always succeed.
+  // Set the event callback for uiohook events.
+  iohook_set_dispatch_proc(&dispatch_proc, nullptr);
+
+/** create input hook */
 #ifdef AE_OS_WIN
-  int status = iohook_run(S_main_win_h);
+  S_iohook_status = iohook_run(S_main_win_h);
 #elif defined AE_OS_MAC
-  int status = iohook_run();
+  S_iohook_status = iohook_run();
 #endif
 
-  if (status != UIOHOOK_SUCCESS) {
-    if (S_zoom_status_future.wait_for(std::chrono::seconds(0)) !=
-        std::future_status::ready) {
-      zoom_status_promise.set_value(ZOOM_STATUS::INITIALIZATION_ERROR);
-    }
-
-    logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
+  if (S_iohook_status != UIOHOOK_SUCCESS) {
+    S_zoom_status = ZOOM_STATUS::INITIALIZATION_ERROR;
+    logger(LOG_LEVEL_ERROR, GetHookErrorStrings(S_iohook_status));
   }
 
-  return status;
+  return S_iohook_status;
 }
 
-static void StartIOHook() {
-  S_zoom_status.reset();
-  std::promise<ZOOM_STATUS> zoom_status_promise;
-  S_zoom_status_future = zoom_status_promise.get_future();
-  HookProc(std::move(zoom_status_promise));
-  // S_iohook_future =
-  //     std::async(std::launch::async, HookProc,
-  //     std::move(zoom_status_promise));
+static int StopIOHook() {
+  if (S_zoom_status != ZOOM_STATUS::FINISHED) {
+    S_iohook_status = iohook_stop();
+  }
+
+  return S_iohook_status;
 }
 
 static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
@@ -455,7 +467,7 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
   static bool isExtendscriptFlagSet = false;
   static AEGP_SuiteHandler suites(sP);
 
-  /** Tell script that the plug-in is loaded into Ae */
+  /** Tell the script that the plug-in is loaded into Ae */
   if (!isExtendscriptFlagSet) {
     RunExtendscript("$.global.__quis_zoom_plugin_is_loaded = true;");
     isExtendscriptFlagSet = true;
@@ -463,8 +475,6 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
   /* Displaying errors and warnings */
   if (log_messages.size() > 0) {
-    std::lock_guard lock(S_log_mutex);
-
     if (S_logging_enabled) {
       for (const auto &msg : log_messages) {
         std::string msg_str = msg.format_str;
@@ -482,24 +492,22 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
   }
 
   /* Passing key presses to the script panel */
-  if (S_is_creating_key_bind && S_key_codes_pass) {
-    KeyCodes keyCodes = S_key_codes_pass.value();
-
-    const std::lock_guard lock(S_create_key_bind_mutex);
-    S_key_codes_pass.reset();
-
-    std::string pass_fn_script = pass_key_bind_js + "(" +
-                                 std::to_string(keyCodes.type) + "," +
-                                 std::to_string(keyCodes.mask) + "," +
-                                 std::to_string(keyCodes.keycode) + ")";
-
-    std::tie(err, std::ignore) = RunExtendscript(pass_fn_script);
-  }
+  // if (S_is_creating_key_bind && S_key_codes_pass) {
+  //   KeyCodes keyCodes = S_key_codes_pass.value();
+  //   S_key_codes_pass.reset();
+  //
+  //   std::string pass_fn_script = pass_key_bind_js + "(" +
+  //                                std::to_string(keyCodes.type) + "," +
+  //                                std::to_string(keyCodes.mask) + "," +
+  //                                std::to_string(keyCodes.keycode) + ")";
+  //
+  //   std::tie(err, std::ignore) = RunExtendscript(pass_fn_script);
+  // }
 
   /* Changing zoom on key presses */
-  if (S_zoom_actions.size() > 0) {
-    S_zoom_actions.runActions();
-  }
+  // if (S_zoom_actions.size() > 0) {
+  //   S_zoom_actions.runActions();
+  // }
 
   return err;
 }
@@ -541,20 +549,10 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
 static A_Err DeathHook(AEGP_GlobalRefcon plugin_refconP,
                        AEGP_DeathRefcon refconP) {
-  // if the iohook thread is not finished
-  if (S_iohook_future.valid() && S_iohook_future.wait_for(std::chrono::seconds(
-                                     0)) == std::future_status::timeout) {
-    int status = iohook_stop();
+  int status = StopIOHook();
 
-    if (status != UIOHOOK_SUCCESS) {
-      logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
-    }
-
-    if (S_iohook_future.valid() &&
-        S_iohook_future.wait_for(std::chrono::seconds(5)) !=
-            std::future_status::ready) {
-      logger(LOG_LEVEL_ERROR, "Zoom Plug-in did not close properly.", "");
-    }
+  if (status != UIOHOOK_SUCCESS) {
+    logger(LOG_LEVEL_ERROR, GetHookErrorStrings(status));
   }
 
   return A_Err_NONE;
@@ -572,9 +570,6 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     sP = pica_basicP;
     S_zoom_id = aegp_plugin_id;
     AEGP_SuiteHandler suites(sP);
-
-    S_call_idle_routines =
-        suites.UtilitySuite6()->AEGP_CauseIdleRoutinesToBeCalled;
 
     // ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&hack_cmd));
     // ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(
@@ -605,9 +600,7 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     gAeEgg = AeEgg(major_versionL);
 
     // Start hook thread
-    if (!err) {
-      StartIOHook();
-    }
+    StartIOHook();
 
   } catch (A_Err &thrown_err) {
     err = thrown_err;
@@ -651,18 +644,6 @@ extern "C" DllExport const char *ESInitialize(const TaggedData **argv,
  */
 extern "C" DllExport void ESTerminate() {}
 
-template <typename T>
-static std::optional<T> WaitForFuture(const std::shared_future<T> &f,
-                                      std::chrono::seconds sec) {
-  std::optional<T> result;
-
-  if (f.valid() && f.wait_for(sec) == std::future_status::ready) {
-    result = f.get();
-  }
-
-  return result;
-}
-
 template <typename F> void try_catch(F &&f) {
   try {
     f();
@@ -674,20 +655,9 @@ template <typename F> void try_catch(F &&f) {
 }
 
 static void FillZoomStatusForScript(TaggedData *retval) {
-  auto zoom_status =
-      WaitForFuture(S_zoom_status_future, std::chrono::seconds(0));
-
-  if (zoom_status) {
-    auto iohook_status =
-        WaitForFuture(S_iohook_future, std::chrono::seconds(0));
-
+  if (S_zoom_status) {
     retval->type = kTypeInteger;
-
-    if (iohook_status.has_value()) {
-      retval->data.intval = static_cast<long>(ZOOM_STATUS::FINISHED);
-    } else {
-      retval->data.intval = static_cast<long>(zoom_status.value());
-    }
+    retval->data.intval = static_cast<long>(S_zoom_status.value());
   }
 }
 
@@ -705,17 +675,11 @@ extern "C" DllExport long status(TaggedData *argv, long argc,
 extern "C" DllExport long getError(TaggedData *argv, long argc,
                                    TaggedData *retval) {
   try_catch([&retval]() {
-    auto iohook_status =
-        WaitForFuture(S_iohook_future, std::chrono::seconds(0));
+    auto [error_str, insructions_str] = GetHookErrorStrings(S_iohook_status);
+    std::string str = error_str + "\n" + insructions_str;
 
-    if (iohook_status) {
-      auto [error_str, insructions_str] =
-          GetHookErrorStrings(iohook_status.value());
-      std::string str = error_str + "\n" + insructions_str;
-
-      retval->type = kTypeString;
-      retval->data.string = getNewBuffer(str);
-    }
+    retval->type = kTypeString;
+    retval->data.string = getNewBuffer(str);
   });
 
   return kESErrOK;
@@ -725,21 +689,14 @@ extern "C" DllExport long getError(TaggedData *argv, long argc,
 extern "C" DllExport long reload(TaggedData *argv, long argc,
                                  TaggedData *retval) {
   try_catch([&retval]() {
-    // Disable logging because we want to pass all errors to the script
+    /** Disable logging because we want to pass all errors to the script instead
+     * of creating alerts */
     S_logging_enabled = false;
+    int status = StopIOHook();
 
-    auto iohook_status =
-        WaitForFuture(S_iohook_future, std::chrono::seconds(0));
-
-    // if the status exists that means that the hook has ended and we can start
-    // it again
-    if (iohook_status) {
+    // if iohook removed successfully
+    if (status == UIOHOOK_SUCCESS) {
       StartIOHook();
-
-      // wait for zoom status
-      auto zoom_status =
-          WaitForFuture(S_zoom_status_future, std::chrono::seconds(5));
-
       FillZoomStatusForScript(retval);
     }
 
@@ -815,8 +772,9 @@ extern "C" DllExport long postZoomAction(TaggedData *argv, long argc,
     kbind.action = KB_ACTION(argv[0].data.intval);
     kbind.amount = argv[1].data.fltval;
 
-    S_zoom_actions.post(kbind);
-    S_call_idle_routines();
+    iohook_event e;
+    e.type = EVENT_KEY_PRESSED;
+    dispatchKeyBindAction(kbind, &e);
 
     retval->data.intval = true;
   });

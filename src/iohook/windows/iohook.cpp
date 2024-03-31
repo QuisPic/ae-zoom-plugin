@@ -1,4 +1,5 @@
 #include "iohook.h"
+#include <iostream>
 #include <windows.h>
 
 #include "dispatch-event.h"
@@ -92,19 +93,24 @@ int iohook_run(HWND hWnd) {
 
 int iohook_stop() {
   if (keyboard_event_hook == NULL && mouse_event_hook == NULL) {
-    return UIOHOOK_FAILURE;
+    return UIOHOOK_SUCCESS;
   }
 
+  BOOL unhookSuccess = true;
   if (keyboard_event_hook != NULL) {
-    UnhookWindowsHookEx(keyboard_event_hook);
+    unhookSuccess = UnhookWindowsHookEx(keyboard_event_hook);
     keyboard_event_hook = NULL;
   }
 
   if (mouse_event_hook != NULL) {
-    UnhookWindowsHookEx(mouse_event_hook);
+    unhookSuccess = UnhookWindowsHookEx(mouse_event_hook);
     mouse_event_hook = NULL;
   }
 
-  dispatch_hook_disabled();
-  return UIOHOOK_SUCCESS;
+  if (unhookSuccess) {
+    dispatch_hook_disabled();
+    return UIOHOOK_SUCCESS;
+  } else {
+    return UIOHOOK_ERROR_UNHOOK_WINDOWS_HOOK_EX;
+  }
 }

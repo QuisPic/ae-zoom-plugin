@@ -26,6 +26,7 @@
 // Windows specific errors.
 #define UIOHOOK_ERROR_SET_WINDOWS_HOOK_EX 0x30
 #define UIOHOOK_ERROR_GET_MODULE_HANDLE 0x31
+#define UIOHOOK_ERROR_UNHOOK_WINDOWS_HOOK_EX 0x32
 
 // Darwin specific errors.
 #define UIOHOOK_ERROR_AXAPI_DISABLED 0x40
@@ -33,6 +34,7 @@
 #define UIOHOOK_ERROR_CREATE_RUN_LOOP_SOURCE 0x42
 #define UIOHOOK_ERROR_GET_RUNLOOP 0x43
 #define UIOHOOK_ERROR_CREATE_OBSERVER 0x44
+#define UIOHOOK_ERROR_CREATE_EVENT_MONITOR 0x45
 /* End Error Codes */
 
 /* Begin Log Levels and Function Prototype */
@@ -81,8 +83,9 @@ typedef struct _mouse_wheel_event_data {
   int16_t x;
   int16_t y;
   uint8_t type;
-  int16_t rotation;
-  uint16_t delta;
+  bool precise;
+  double rotation;
+  double delta;
   uint8_t direction;
 } mouse_wheel_event_data;
 

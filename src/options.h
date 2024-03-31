@@ -3,9 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <vector>
 
-constexpr uint16_t MOUSE_WHEEL_UP = 1;
-constexpr uint16_t MOUSE_WHEEL_DOWN = 2;
-
+enum SCROLL_DIRECTION { UP = 1, DOWN, LEFT, RIGHT };
 enum class ZOOM_AROUND { PANEL_CENTER, CURSOR_POSTION };
 enum class KB_ACTION { CHANGE, DECREMENT, SET_TO };
 
@@ -54,25 +52,7 @@ public:
 
   KeyCodes(iohook_event *e) {
     type = e->type;
-    // mask = 0x0;
     mask = e->mask;
-
-    // make the mask accept both left and right buttons
-    // if (e->mask & (MASK_CTRL)) {
-    //   mask |= MASK_CTRL;
-    // }
-    //
-    // if (e->mask & (MASK_META)) {
-    //   mask |= MASK_META;
-    // }
-    //
-    // if (e->mask & (MASK_SHIFT)) {
-    //   mask |= MASK_SHIFT;
-    // }
-    //
-    // if (e->mask & (MASK_ALT)) {
-    //   mask |= MASK_ALT;
-    // }
 
     switch (e->type) {
     case EVENT_KEY_PRESSED:
@@ -82,7 +62,13 @@ public:
       keycode = e->data.mouse.button;
       break;
     case EVENT_MOUSE_WHEEL:
-      keycode = e->data.wheel.rotation >= 0 ? MOUSE_WHEEL_UP : MOUSE_WHEEL_DOWN;
+      if (e->data.wheel.direction == WHEEL_VERTICAL_DIRECTION) {
+        keycode = e->data.wheel.rotation >= 0 ? SCROLL_DIRECTION::UP
+                                              : SCROLL_DIRECTION::DOWN;
+      } else if (e->data.wheel.direction == WHEEL_HORIZONTAL_DIRECTION) {
+        keycode = e->data.wheel.rotation >= 0 ? SCROLL_DIRECTION::RIGHT
+                                              : SCROLL_DIRECTION::LEFT;
+      }
       break;
     default:
       keycode = 0;

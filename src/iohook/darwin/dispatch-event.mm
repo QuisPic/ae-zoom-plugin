@@ -107,40 +107,53 @@ bool dispatch_button_press(NSEvent *event, NSInteger button) {
 bool dispatch_mouse_wheel(NSEvent *event) {
   bool consumed = false;
 
-  if (event.scrollingDeltaY != 0 || event.scrollingDeltaX != 0) {
-    // Populate mouse wheel event.
-    io_event.time = event.timestamp;
-    io_event.reserved = 0x00;
+  // Populate mouse wheel event.
+  io_event.time = event.timestamp;
+  io_event.reserved = 0x00;
 
-    io_event.type = EVENT_MOUSE_WHEEL;
-    io_event.mask = get_modifiers(event.modifierFlags);
+  io_event.type = EVENT_MOUSE_WHEEL;
+  io_event.mask = get_modifiers(event.modifierFlags);
 
-    io_event.data.wheel.x = 0; // we don't need location
-    io_event.data.wheel.y = 0; // we don't need location
-    io_event.data.wheel.delta = 0;
-    io_event.data.wheel.rotation = 0;
+  io_event.data.wheel.x = 0; // we don't need location
+  io_event.data.wheel.y = 0; // we don't need location
+  io_event.data.wheel.delta = 0;
+  io_event.data.wheel.rotation = 0;
+
+  if (event.hasPreciseScrollingDeltas) {
+    // continuous device (trackpad)
+    io_event.data.wheel.precise = true;
+    io_event.data.wheel.type = WHEEL_BLOCK_SCROLL;
+
+    if (event.deltaY != 0) {
+      io_event.data.wheel.direction = WHEEL_VERTICAL_DIRECTION;
+      io_event.data.wheel.delta = event.deltaY;
+      io_event.data.wheel.rotation = event.deltaY;
+    } else if (event.deltaX != 0) {
+      io_event.data.wheel.direction = WHEEL_HORIZONTAL_DIRECTION;
+      io_event.data.wheel.delta = event.deltaX;
+      io_event.data.wheel.rotation = event.deltaX;
+    }
+  } else {
+    // non-continuous device (wheel mice)
+    io_event.data.wheel.type = WHEEL_UNIT_SCROLL;
+    io_event.data.wheel.precise = false;
 
     if (event.scrollingDeltaY != 0) {
+      io_event.data.wheel.direction = WHEEL_VERTICAL_DIRECTION;
       io_event.data.wheel.delta = event.scrollingDeltaY;
       io_event.data.wheel.rotation = event.scrollingDeltaY;
     } else if (event.scrollingDeltaX != 0) {
+      io_event.data.wheel.direction = WHEEL_HORIZONTAL_DIRECTION;
       io_event.data.wheel.delta = event.scrollingDeltaX;
-      io_event.data.wheel.rotation = event.scrollingDeltaY;
+      io_event.data.wheel.rotation = event.scrollingDeltaX;
     }
-
-    if (event.hasPreciseScrollingDeltas) {
-      // continuous device (trackpad)
-      io_event.data.wheel.type = WHEEL_BLOCK_SCROLL;
-    } else {
-      // non-continuous device (wheel mice)
-      io_event.data.wheel.type = WHEEL_UNIT_SCROLL;
-      io_event.data.wheel.rotation *= 10; // generic line height
-    }
-
-    // Fire mouse wheel event.
-    dispatch_event(&io_event);
-    consumed = io_event.reserved & 0x01;
   }
+
+  // Fire mouse wheel event.
+  if (io_event.data.wheel.rotation != 0) {
+    dispatch_event(&io_event);
+  }
+  consumed = io_event.reserved & 0x01;
 
   return consumed;
 }

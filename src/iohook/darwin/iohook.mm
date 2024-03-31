@@ -50,17 +50,16 @@ int iohook_run() {
     dispatch_hook_enabled();
     return UIOHOOK_SUCCESS;
   } else {
-    return UIOHOOK_FAILURE;
+    return UIOHOOK_ERROR_CREATE_EVENT_MONITOR;
   }
 }
 
 int iohook_stop() {
   if (monitorHandler) {
-    dispatch_hook_disabled();
     [NSEvent removeMonitor:monitorHandler];
-
-    return UIOHOOK_SUCCESS;
-  } else {
-    return UIOHOOK_FAILURE;
+    monitorHandler = NULL;
   }
+
+  dispatch_hook_disabled();
+  return UIOHOOK_SUCCESS;
 }
