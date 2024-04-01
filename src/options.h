@@ -56,9 +56,11 @@ public:
 
     switch (e->type) {
     case EVENT_KEY_PRESSED:
+    case EVENT_KEY_RELEASED:
       keycode = e->data.keyboard.keycode;
       break;
     case EVENT_MOUSE_PRESSED:
+    case EVENT_MOUSE_RELEASED:
       keycode = e->data.mouse.button;
       break;
     case EVENT_MOUSE_WHEEL:

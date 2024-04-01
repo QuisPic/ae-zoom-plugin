@@ -81,6 +81,27 @@ bool dispatch_key_press(NSEvent *event) {
   return consumed;
 }
 
+bool dispatch_key_release(NSEvent *event) {
+  bool consumed = false;
+
+  // Populate key pressed event.
+  io_event.time = event.timestamp;
+  io_event.reserved = 0x00;
+  io_event.type = EVENT_KEY_RELEASED;
+  io_event.mask = get_modifiers(event.modifierFlags);
+
+  io_event.data.keyboard.keycode = keycode_to_scancode(event.keyCode);
+  io_event.data.keyboard.rawcode = event.keyCode;
+  io_event.data.keyboard.keychar = CHAR_UNDEFINED;
+  io_event.data.keyboard.repeat = event.ARepeat;
+
+  // Fire key pressed event.
+  dispatch_event(&io_event);
+  consumed = io_event.reserved & 0x01;
+
+  return consumed;
+}
+
 bool dispatch_button_press(NSEvent *event, NSInteger button) {
   bool consumed = false;
 

@@ -1,5 +1,4 @@
 #include "iohook.h"
-#include <iostream>
 #include <windows.h>
 
 #include "dispatch-event.h"
@@ -11,11 +10,14 @@ LRESULT CALLBACK KeyboardHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
   bool consumed = false;
   WORD flags = HIWORD(lParam);
 
-  /** accept only key down events and skip modifier keys */
-  if (nCode == HC_ACTION && !(flags & KF_UP) && wParam != VK_SHIFT &&
-      wParam != VK_CONTROL && wParam != VK_LWIN && wParam != VK_RWIN &&
-      wParam != VK_MENU) {
-    consumed = dispatch_key_press(wParam, flags);
+  /** accept only non-modifier keys */
+  if (nCode == HC_ACTION && wParam != VK_SHIFT && wParam != VK_CONTROL &&
+      wParam != VK_LWIN && wParam != VK_RWIN && wParam != VK_MENU) {
+    if (flags & KF_UP) {
+      consumed = dispatch_key_release(wParam, flags);
+    } else {
+      consumed = dispatch_key_press(wParam, flags);
+    }
   }
 
   if (!consumed || nCode < 0) {

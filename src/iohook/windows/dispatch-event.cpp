@@ -81,6 +81,27 @@ bool dispatch_key_press(WPARAM wParam, WORD flags) {
   return consumed;
 }
 
+bool dispatch_key_release(WPARAM wParam, WORD flags) {
+  bool consumed = false;
+
+  // Populate key pressed event.
+  io_event.time = 0; // don't need time at the moment
+  io_event.reserved = 0x00;
+  io_event.type = EVENT_KEY_RELEASED;
+  io_event.mask = get_modifiers();
+
+  io_event.data.keyboard.keycode = keycode_to_scancode((DWORD)wParam, flags);
+  io_event.data.keyboard.rawcode = (uint16_t)wParam;
+  io_event.data.keyboard.keychar = CHAR_UNDEFINED;
+  io_event.data.keyboard.repeat = (flags & KF_REPEAT) == KF_REPEAT;
+
+  // Fire key pressed event.
+  dispatch_event(&io_event);
+  consumed = io_event.reserved & 0x01;
+
+  return consumed;
+}
+
 bool dispatch_button_press(MOUSEHOOKSTRUCT *mshook, uint16_t button) {
   bool consumed = false;
 

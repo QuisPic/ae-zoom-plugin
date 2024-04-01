@@ -7,12 +7,8 @@
 #include "iohook.h"
 #include "options.h"
 #include "util-functions.h"
-// #include "zoom-actions.h"
-// #include <atomic>
-#include <exception>
-// #include <future>
-// #include <mutex>
 #include <cmath>
+#include <exception>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -24,27 +20,18 @@
 
 static AEGP_PluginID S_zoom_id = 0L;
 static SPBasicSuite *sP = NULL;
-
-// static A_Err (*S_call_idle_routines)(void) = nullptr;
-
 static bool S_is_creating_key_bind = false;
 static bool S_logging_enabled = true;
-// static std::shared_future<ZOOM_STATUS> S_zoom_status_future;
 static std::optional<ZOOM_STATUS> S_zoom_status;
 static int S_iohook_status = UIOHOOK_FAILURE;
 static std::optional<KeyCodes> S_key_codes_pass;
+static std::vector<LogMessage> log_messages;
 
-// static AEGP_Command hack_cmd;
+// static AEGP_Command test_cmd;
 
 #ifdef AE_OS_WIN
 static HWND S_main_win_h = nullptr;
 #endif
-
-static std::vector<LogMessage> log_messages;
-// static ZoomActions S_zoom_actions;
-
-// static std::mutex S_create_key_bind_mutex;
-// static std::mutex S_log_mutex;
 
 /**
  * \brief Utility function to handle strings and memory clean up
@@ -210,50 +197,6 @@ static A_Err ReadKeyBindings() {
   return err;
 }
 
-// static bool IsSameProcessId(
-// #ifdef AE_OS_WIN
-//     HWND hwnd
-// #elif defined AE_OS_MAC
-//     int windowPIDValue
-// #endif
-// ) {
-// #ifdef AE_OS_WIN
-//   static DWORD aePID = GetCurrentProcessId();
-//   DWORD windowPIDValue;
-//
-//   GetWindowThreadProcessId(hwnd, &windowPIDValue);
-// #elif defined AE_OS_MAC
-//   static int aePID = getpid();
-// #endif
-//   return windowPIDValue == aePID;
-// }
-
-// bool isMainWindowActive() {
-// #ifdef AE_OS_WIN
-//   return IsSameProcessId(GetForegroundWindow());
-// #elif defined AE_OS_MAC
-//   return IsSameProcessId(osx::getFrontmostAppPID());
-// #endif
-// }
-//
-// bool IsCursorOnMainWindow() {
-//   bool isOverWindow = false;
-//
-// #ifdef AE_OS_MAC
-//   auto pidUnderCursorOpt = osx::windowUnderCursorPID();
-//   if (pidUnderCursorOpt) {
-//     isOverWindow = IsSameProcessId(pidUnderCursorOpt.value());
-//   }
-// #elif defined AE_OS_WIN
-//   POINT cursor_pos;
-//   GetCursorPos(&cursor_pos); // Get the cursor position in screen coordinates
-//
-//   isOverWindow = IsSameProcessId(WindowFromPoint(cursor_pos));
-// #endif
-//
-//   return isOverWindow;
-// }
-
 static void dispatchKeyBindAction(const KeyBindAction &act,
                                   iohook_event *const event) {
   double zoomValue = act.getAmount(gHighDpiOptions);
@@ -329,25 +272,25 @@ void dispatch_proc(iohook_event *const event, void *user_data) {
   } else if (event->type == EVENT_HOOK_DISABLED) {
     S_zoom_status = ZOOM_STATUS::FINISHED;
   } else if (S_is_creating_key_bind) {
-
     // stop event propagation for Escape because it must close the Key
     // Capture window and it may accidentally stop extendscript execution
     // if passed to AE
-    //
-    /** TODO capture key released event as well */
-    if ((event->type == EVENT_KEY_PRESSED) &&
+    if ((event->type == EVENT_KEY_PRESSED ||
+         event->type == EVENT_KEY_RELEASED) &&
         event->data.keyboard.keycode == VC_ESCAPE) {
       event->reserved = 0x1;
     }
 
+    /** no need to pass repeated events when creating key bind */
+    if (event->type == EVENT_KEY_PRESSED && event->data.keyboard.repeat) {
+      return;
+    }
+
     if (event->type == EVENT_KEY_PRESSED ||
+        (event->type == EVENT_KEY_RELEASED &&
+         event->data.keyboard.keycode == VC_ESCAPE) ||
         event->type == EVENT_MOUSE_PRESSED ||
         event->type == EVENT_MOUSE_WHEEL) {
-      /** no need to pass repeated events when creating key bind */
-      if (event->type == EVENT_KEY_PRESSED && event->data.keyboard.repeat) {
-        return;
-      }
-
       KeyCodes keyCodes(event);
       std::string pass_fn_script = pass_key_bind_js + "(" +
                                    std::to_string(keyCodes.type) + "," +
@@ -491,24 +434,6 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
     log_messages.clear();
   }
 
-  /* Passing key presses to the script panel */
-  // if (S_is_creating_key_bind && S_key_codes_pass) {
-  //   KeyCodes keyCodes = S_key_codes_pass.value();
-  //   S_key_codes_pass.reset();
-  //
-  //   std::string pass_fn_script = pass_key_bind_js + "(" +
-  //                                std::to_string(keyCodes.type) + "," +
-  //                                std::to_string(keyCodes.mask) + "," +
-  //                                std::to_string(keyCodes.keycode) + ")";
-  //
-  //   std::tie(err, std::ignore) = RunExtendscript(pass_fn_script);
-  // }
-
-  /* Changing zoom on key presses */
-  // if (S_zoom_actions.size() > 0) {
-  //   S_zoom_actions.runActions();
-  // }
-
   return err;
 }
 
@@ -525,7 +450,7 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 //     return err;
 //   }
 //
-//   if (command == hack_cmd) {
+//   if (command == test_cmd) {
 //     AEGP_SuiteHandler suites(sP);
 //
 //     // suites.UtilitySuite3()->AEGP_ReportInfo(S_zoom_id, msg_str.c_str());
@@ -542,7 +467,7 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 //   A_Err err = A_Err_NONE;
 //   AEGP_SuiteHandler suites(sP);
 //
-//   ERR(suites.CommandSuite1()->AEGP_EnableCommand(hack_cmd));
+//   ERR(suites.CommandSuite1()->AEGP_EnableCommand(test_cmd));
 //
 //   return err;
 // }
@@ -571,9 +496,9 @@ A_Err EntryPointFunc(struct SPBasicSuite *pica_basicP,  /* >> */
     S_zoom_id = aegp_plugin_id;
     AEGP_SuiteHandler suites(sP);
 
-    // ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&hack_cmd));
+    // ERR(suites.CommandSuite1()->AEGP_GetUniqueCommand(&test_cmd));
     // ERR(suites.CommandSuite1()->AEGP_InsertMenuCommand(
-    //     hack_cmd, "Hack Bip Bop", AEGP_Menu_ANIMATION,
+    //     test_cmd, "Test Bip Bop", AEGP_Menu_ANIMATION,
     //     AEGP_MENU_INSERT_AT_BOTTOM));
     // ERR(suites.RegisterSuite5()->AEGP_RegisterCommandHook(
     //     S_zoom_id, AEGP_HP_BeforeAE, AEGP_Command_ALL, CommandHook, 0));

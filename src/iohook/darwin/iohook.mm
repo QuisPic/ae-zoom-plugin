@@ -13,6 +13,9 @@ NSEvent * (^eventHandler)(NSEvent *) = ^NSEvent *(NSEvent *event) {
   case NSEventTypeKeyDown:
     consumed = dispatch_key_press(event);
     break;
+  case NSEventTypeKeyUp:
+    consumed = dispatch_key_release(event);
+    break;
   case NSEventTypeLeftMouseDown:
     consumed = dispatch_button_press(event, MOUSE_BUTTON1);
     break;
@@ -38,7 +41,7 @@ NSEvent * (^eventHandler)(NSEvent *) = ^NSEvent *(NSEvent *event) {
 
 int iohook_run() {
   // Define the event mask to listen for
-  NSEventMask eventMask = NSEventMaskKeyDown | NSEventMaskLeftMouseDown |
+  NSEventMask eventMask = NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskLeftMouseDown |
                           NSEventMaskRightMouseDown |
                           NSEventMaskOtherMouseDown | NSEventMaskScrollWheel;
 
