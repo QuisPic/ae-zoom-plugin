@@ -33,18 +33,22 @@ LRESULT CALLBACK MouseHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
   if (nCode == HC_ACTION) {
     switch (wParam) {
     case WM_LBUTTONDOWN:
+    case WM_LBUTTONDBLCLK:
       consumed =
           dispatch_button_press((MOUSEHOOKSTRUCT *)lParam, MOUSE_BUTTON1);
       break;
     case WM_RBUTTONDOWN:
+    case WM_RBUTTONDBLCLK:
       consumed =
           dispatch_button_press((MOUSEHOOKSTRUCT *)lParam, MOUSE_BUTTON2);
       break;
     case WM_MBUTTONDOWN:
+    case WM_MBUTTONDBLCLK:
       consumed =
           dispatch_button_press((MOUSEHOOKSTRUCT *)lParam, MOUSE_BUTTON3);
       break;
-    case WM_XBUTTONDOWN: {
+    case WM_XBUTTONDOWN: 
+    case WM_XBUTTONDBLCLK: {
       auto mshook = (MOUSEHOOKSTRUCTEX *)lParam;
       if (HIWORD(mshook->mouseData) == XBUTTON1) {
         consumed = dispatch_button_press(mshook, MOUSE_BUTTON4);
