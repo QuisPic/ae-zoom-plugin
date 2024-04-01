@@ -23,10 +23,7 @@ NSEvent * (^eventHandler)(NSEvent *) = ^NSEvent *(NSEvent *event) {
     consumed = dispatch_button_press(event, MOUSE_BUTTON2);
     break;
   case NSEventTypeOtherMouseDown:
-    if (event.buttonNumber < UINT16_MAX) {
-      uint16_t button = event.buttonNumber + 1;
-      consumed = dispatch_button_press(event, button);
-    }
+    consumed = dispatch_button_press(event, event.buttonNumber);
     break;
   case NSEventTypeScrollWheel:
     consumed = dispatch_mouse_wheel(event);
@@ -41,8 +38,8 @@ NSEvent * (^eventHandler)(NSEvent *) = ^NSEvent *(NSEvent *event) {
 
 int iohook_run() {
   // Define the event mask to listen for
-  NSEventMask eventMask = NSEventMaskKeyDown | NSEventMaskKeyUp | NSEventMaskLeftMouseDown |
-                          NSEventMaskRightMouseDown |
+  NSEventMask eventMask = NSEventMaskKeyDown | NSEventMaskKeyUp |
+                          NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown |
                           NSEventMaskOtherMouseDown | NSEventMaskScrollWheel;
 
   // Add the local monitor for events

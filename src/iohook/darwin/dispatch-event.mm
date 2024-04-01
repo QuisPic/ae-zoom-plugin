@@ -112,7 +112,6 @@ bool dispatch_button_press(NSEvent *event, NSInteger button) {
   io_event.type = EVENT_MOUSE_PRESSED;
   io_event.mask = get_modifiers(event.modifierFlags);
 
-  // io_event.data.mouse.button = event.buttonNumber + 1;
   io_event.data.mouse.button = button;
   io_event.data.mouse.clicks = event.clickCount;
   io_event.data.mouse.x = 0; // we don't need location
