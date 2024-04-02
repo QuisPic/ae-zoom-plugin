@@ -22,23 +22,26 @@
 #include "ae-zoom.h"
 
 typedef struct {
-	unsigned long	index;
-	char			str[256];
+  unsigned long index;
+  char str[256];
 } TableString;
 
-TableString		g_strs[StrID_NUMTYPES] = {
-	StrID_NONE,							"",
-	StrID_Name,							"Easy Cheese",
-	StrID_Description,					"Keyframer plug-in.Copyright 1994-2005 Adobe Systems Incorporated.",
-	StrID_MarkerText,					"Easy Cheese was here.",
-	StrID_URL,							"http://www.adobe.com",
-	StrID_Chapter,						"chapter %d",
-	StrID_SuiteError,					"Error acquiring suite."
-	
+TableString g_strs[StrID_NUMTYPES] = {
+    StrID_NONE,
+    "",
+    StrID_Name,
+    "Easy Cheese",
+    StrID_Description,
+    "Keyframer plug-in.Copyright 1994-2005 Adobe Systems Incorporated.",
+    StrID_MarkerText,
+    "Easy Cheese was here.",
+    StrID_URL,
+    "http://www.adobe.com",
+    StrID_Chapter,
+    "chapter %d",
+    StrID_SuiteError,
+    "Error acquiring suite."
+
 };
 
-
-char	*GetStringPtr(int strNum)
-{
-	return g_strs[strNum].str;
-}
+char *GetStringPtr(int strNum) { return g_strs[strNum].str; }
