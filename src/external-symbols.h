@@ -33,6 +33,10 @@ enum FEE_CoordFxType {
   Two,
 };
 
+#ifdef AE_OS_WIN
+std::string GetLastWindowsErrorStr();
+#endif
+
 class BEE_Project;
 class BEE_Item;
 class CPane;

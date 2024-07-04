@@ -4,7 +4,7 @@
 #include "util-functions.h"
 
 #ifdef AE_OS_WIN
-static std::string GetLastWindowsErrorStr() {
+std::string GetLastWindowsErrorStr() {
   // Retrieve the system error message for the last-error code
 
   std::string result;

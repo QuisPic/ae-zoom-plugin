@@ -26,6 +26,7 @@ static std::optional<ZOOM_STATUS> S_zoom_status;
 static int S_iohook_status = UIOHOOK_FAILURE;
 static std::optional<KeyCodes> S_key_codes_pass;
 static std::vector<LogMessage> log_messages;
+static std::tuple<std::string, std::string> lastErrorMessage;
 
 // static AEGP_Command test_cmd;
 
@@ -345,31 +346,39 @@ std::tuple<std::string, std::string> GetHookErrorStrings(int status) {
     return result;
   }
 
+  std::string OSErrorString;
+
+#ifdef AE_OS_WIN
+  OSErrorString = "Error message: " + GetLastWindowsErrorStr();
+#endif
+
   switch (status) {
   // System level errors.
   case UIOHOOK_ERROR_OUT_OF_MEMORY:
-    result = {"Failed to allocate memory.", ""};
+    result = {"Failed to allocate memory.", OSErrorString};
     break;
 
   // Windows specific errors.
   case UIOHOOK_ERROR_SET_WINDOWS_HOOK_EX:
-    result = {"Failed to register windows hook.", ""};
+    result = {"Failed to register windows hook.", OSErrorString};
     break;
   case UIOHOOK_ERROR_UNHOOK_WINDOWS_HOOK_EX:
-    result = {"Failed to unhook windows hook.", ""};
+    result = {"Failed to unhook windows hook.", OSErrorString};
     break;
 
   // Darwin specific errors.
   case UIOHOOK_ERROR_CREATE_EVENT_MONITOR:
-    result = {"Failed to create local events monitor.", ""};
+    result = {"Failed to create local events monitor.", OSErrorString};
     break;
 
   // Default error.
   case UIOHOOK_FAILURE:
   default:
-    result = {"An unknown hook error occurred.", ""};
+    result = {"An unknown hook error occurred.", OSErrorString};
     break;
   }
+
+  lastErrorMessage = result;
 
   return result;
 }
@@ -600,7 +609,8 @@ extern "C" DllExport long status(TaggedData *argv, long argc,
 extern "C" DllExport long getError(TaggedData *argv, long argc,
                                    TaggedData *retval) {
   try_catch([&retval]() {
-    auto [error_str, insructions_str] = GetHookErrorStrings(S_iohook_status);
+    // auto [error_str, insructions_str] = GetHookErrorStrings(S_iohook_status);
+    auto &[error_str, insructions_str] = lastErrorMessage;
     std::string str = error_str + "\n" + insructions_str;
 
     retval->type = kTypeString;
