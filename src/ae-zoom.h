@@ -12,7 +12,7 @@
 #include "entry.h"
 #include <nlohmann/json.hpp>
 
-const std::string VERSION = "0.3.0";
+const std::string VERSION = "0.3.1";
 using json = nlohmann::json;
 
 #define AEGP_MAX_STREAM_DIM 4

@@ -98,7 +98,7 @@ std::tuple<A_Err, std::string> RunExtendscript(const std::string &script_str) {
   /* After Effects can't execute script and displays an error if the main window
    * is disabled */
   if (!IsMainWindowEnabled()) {
-    return {err, ""};
+    return {A_Err_GENERIC, ""};
   }
 
   AEGP_SuiteHandler suites(sP);
@@ -421,8 +421,12 @@ static A_Err IdleHook(AEGP_GlobalRefcon plugin_refconP, AEGP_IdleRefcon refconP,
 
   /** Tell the script that the plug-in is loaded into Ae */
   if (!isExtendscriptFlagSet) {
-    RunExtendscript("$.global.__quis_zoom_plugin_is_loaded = true;");
-    isExtendscriptFlagSet = true;
+    auto [err, errMessage] =
+        RunExtendscript("$.global.__quis_zoom_plugin_is_loaded = true;");
+
+    if (err == A_Err_NONE) {
+      isExtendscriptFlagSet = true;
+    }
   }
 
   /* Displaying errors and warnings */

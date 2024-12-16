@@ -18,7 +18,8 @@ std::string GetLastWindowsErrorStr() {
       NULL);
 
   if (message_length != 0) {
-    result = std::string(static_cast<char *>(lpMsgBuf));
+    result = "[" + std::to_string(dw) + "] " +
+             std::string(static_cast<char *>(lpMsgBuf));
   }
 
   LocalFree(lpMsgBuf);
